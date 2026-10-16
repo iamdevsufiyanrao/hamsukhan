@@ -1,0 +1,127 @@
+<?php
+
+use App\Http\Controllers\Admin\AccountController;
+use App\Http\Controllers\Admin\MessageController;
+use App\Http\Controllers\Admin\VoiceSampleController as AdminVoiceSampleController;
+use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
+use App\Http\Controllers\Admin\TopUpController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\BookingController;
+use App\Http\Controllers\BotStudioController;
+use App\Http\Controllers\ContactController;
+use App\Http\Controllers\CallController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\KnowledgeFileController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TestCallController;
+use App\Http\Controllers\VoiceController;
+use App\Http\Controllers\VoiceSampleController;
+use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureBot;
+use App\Http\Middleware\EnsureNotSuspended;
+use Illuminate\Support\Facades\Route;
+
+// Public landing page; signed-in users see it too (its buttons point to the dashboard).
+Route::get('/', [VoiceSampleController::class, 'landing'])->name('home');
+Route::get('/voice-samples/{sample}/play', [VoiceSampleController::class, 'play'])->middleware(['signed', 'throttle:60,1'])->name('voice-samples.play');
+Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact');
+
+// ---------- Guests ----------
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+    Route::get('/forgot-password', [AuthController::class, 'showForgot'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showReset'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'reset'])->name('password.update');
+});
+
+// ---------- Any signed-in user ----------
+Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::post('/impersonation/stop', [AccountController::class, 'stopImpersonating'])->name('impersonation.stop');
+
+    Route::get('/settings', [SettingsController::class, 'show'])->name('settings');
+    Route::patch('/settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
+    Route::post('/settings/avatar', [SettingsController::class, 'updateAvatar'])->name('settings.avatar');
+    Route::delete('/settings/avatar', [SettingsController::class, 'destroyAvatar'])->name('settings.avatar.destroy');
+    Route::put('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
+    Route::delete('/settings/account', [SettingsController::class, 'destroy'])->name('settings.destroy');
+
+    // ---------- Super admin ----------
+    Route::middleware(EnsureAdmin::class)->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/', [AccountController::class, 'overview'])->name('overview');
+        Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
+        Route::get('/accounts/{user}', [AccountController::class, 'show'])->name('accounts.show');
+        Route::post('/accounts/{user}/suspend', [AccountController::class, 'suspend'])->name('accounts.suspend');
+        Route::post('/accounts/{user}/activate', [AccountController::class, 'activate'])->name('accounts.activate');
+        Route::post('/accounts/{user}/balance', [AccountController::class, 'adjustBalance'])->name('accounts.balance');
+        Route::post('/accounts/{user}/impersonate', [AccountController::class, 'impersonate'])->name('accounts.impersonate');
+
+        Route::get('/settings', [AdminSettingsController::class, 'show'])->name('settings');
+        Route::patch('/settings/{group}', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::delete('/settings/secret/{key}', [AdminSettingsController::class, 'clearSecret'])->name('settings.secret');
+        Route::post('/settings/test/{provider}', [AdminSettingsController::class, 'test'])->middleware('throttle:10,1')->name('settings.test');
+        Route::post('/settings/connectors/{integration}/toggle', [AdminSettingsController::class, 'toggleConnector'])->name('settings.connector');
+        Route::post('/settings/cron/run', [AdminSettingsController::class, 'runCron'])->name('settings.cron');
+        Route::get('/settings/package.zip', [IntegrationController::class, 'package'])->name('settings.package');
+
+        Route::get('/top-ups', [TopUpController::class, 'index'])->name('top-ups');
+        Route::get('/top-ups/{topUp}/proof', [TopUpController::class, 'proof'])->name('top-ups.proof');
+        Route::post('/top-ups/{topUp}/approve', [TopUpController::class, 'approve'])->name('top-ups.approve');
+        Route::post('/top-ups/{topUp}/reject', [TopUpController::class, 'reject'])->name('top-ups.reject');
+
+        Route::get('/voice-samples', [AdminVoiceSampleController::class, 'index'])->name('voice-samples');
+        Route::post('/voice-samples', [AdminVoiceSampleController::class, 'store'])->name('voice-samples.store');
+        Route::patch('/voice-samples/{sample}', [AdminVoiceSampleController::class, 'update'])->name('voice-samples.update');
+        Route::delete('/voice-samples/{sample}', [AdminVoiceSampleController::class, 'destroy'])->name('voice-samples.destroy');
+
+        Route::get('/messages', [MessageController::class, 'index'])->name('messages');
+        Route::post('/messages/{message}/read', [MessageController::class, 'markRead'])->name('messages.read');
+        Route::delete('/messages/{message}', [MessageController::class, 'destroy'])->name('messages.destroy');
+    });
+});
+
+// ---------- Customer app (needs a bot) ----------
+Route::middleware(['auth', EnsureNotSuspended::class, EnsureBot::class])->group(function () {
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+    Route::get('/bot-studio', [BotStudioController::class, 'show'])->name('bot-studio');
+    Route::patch('/bot-studio/config', [BotStudioController::class, 'updateConfig'])->name('bot.config');
+    Route::patch('/bot-studio/capture', [BotStudioController::class, 'updateCaptureFields'])->name('bot.capture');
+    Route::patch('/bot-studio/voice', [BotStudioController::class, 'updateVoice'])->name('bot.voice');
+    Route::patch('/bot-studio/knowledge', [BotStudioController::class, 'updateKnowledge'])->name('bot.knowledge');
+    Route::patch('/bot-studio/widget', [BotStudioController::class, 'updateWidget'])->name('bot.widget');
+
+    Route::post('/voices', [VoiceController::class, 'store'])->name('voices.store');
+    Route::get('/voices/{voice}/sample', [VoiceController::class, 'sample'])->name('voices.sample');
+    Route::delete('/voices/{voice}', [VoiceController::class, 'destroy'])->name('voices.destroy');
+
+    Route::post('/knowledge', [KnowledgeFileController::class, 'store'])->name('knowledge.store');
+    Route::delete('/knowledge/{file}', [KnowledgeFileController::class, 'destroy'])->name('knowledge.destroy');
+
+    Route::get('/calls', [CallController::class, 'index'])->name('calls');
+    Route::get('/calls/export', [CallController::class, 'export'])->name('calls.export');
+    Route::get('/calls/{call}', [CallController::class, 'show'])->name('calls.show');
+    Route::post('/test-call/finish', TestCallController::class)->name('test-call.finish');
+
+    Route::get('/bookings', [BookingController::class, 'index'])->name('bookings');
+    Route::patch('/bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
+
+    Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations');
+    Route::get('/integrations/connector.zip', [IntegrationController::class, 'package'])->name('integrations.package');
+    Route::post('/integrations', [IntegrationController::class, 'store'])->name('integrations.store');
+    Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');
+    Route::post('/integrations/{integration}/toggle', [IntegrationController::class, 'toggle'])->name('integrations.toggle');
+    Route::post('/integrations/{integration}/secret', [IntegrationController::class, 'rotateSecret'])->name('integrations.secret');
+    Route::post('/integrations/{integration}/test', [IntegrationController::class, 'test'])->name('integrations.test');
+    Route::delete('/integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
+    Route::post('/integration-deliveries/{delivery}/retry', [IntegrationController::class, 'retry'])->name('integrations.retry');
+
+    Route::get('/billing', [BillingController::class, 'index'])->name('billing');
+    Route::post('/billing/top-ups', [BillingController::class, 'storeTopUp'])->name('top-ups.store');
+});
