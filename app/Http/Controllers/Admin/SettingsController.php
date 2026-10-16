@@ -12,6 +12,7 @@ use App\Services\PlatformSettings;
 use App\Services\ProviderCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -127,7 +128,9 @@ class SettingsController extends Controller
 
     private function system(): array
     {
-        $lastRun = Cache::get('hamsukhan:cron_last_run');
+        // Stored as a Unix timestamp: cache.serializable_classes is off, so a cached Carbon comes back as __PHP_Incomplete_Class.
+        $ts = Cache::get('hamsukhan:cron_last_run');
+        $lastRun = is_int($ts) ? Carbon::createFromTimestamp($ts) : null;
         // realpath works for symlinks and Windows junctions (is_dir/is_link don't see junctions).
         $linked = realpath(public_path('storage')) !== false && realpath(public_path('storage')) === realpath(storage_path('app/public'));
 

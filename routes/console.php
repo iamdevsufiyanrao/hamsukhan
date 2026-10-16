@@ -9,4 +9,4 @@ use Illuminate\Support\Facades\Schedule;
 Schedule::command('hamsukhan:deliver-integrations')->everyMinute()->withoutOverlapping();
 
 // Heartbeat so Super admin → Settings → Cron & system can show whether cron is actually running.
-Schedule::call(fn () => Cache::forever('hamsukhan:cron_last_run', now()))->everyMinute()->name('cron-heartbeat');
+Schedule::call(fn () => Cache::forever('hamsukhan:cron_last_run', now()->getTimestamp()))->everyMinute()->name('cron-heartbeat');

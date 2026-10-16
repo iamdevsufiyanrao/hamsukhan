@@ -146,7 +146,8 @@ class PlatformSettingsTest extends TestCase
         $this->actingAs($admin)->get('/admin/settings?tab=system')->assertOk()->assertSee('"healthy":false', false);
 
         $this->artisan('schedule:run')->assertSuccessful();
-        $this->assertNotNull(Cache::get('hamsukhan:cron_last_run'));
+        // Must be a plain int: real cache stores can't unserialize objects (cache.serializable_classes is off).
+        $this->assertIsInt(Cache::get('hamsukhan:cron_last_run'));
         $this->actingAs($admin)->get('/admin/settings?tab=system')->assertSee('"healthy":true', false);
     }
 }
