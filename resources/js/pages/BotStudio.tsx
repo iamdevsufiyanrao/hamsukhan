@@ -447,9 +447,36 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
     }, [open]);
     useEffect(() => () => stop(), []);
 
-    const startRec = async () => {
+    const fileInput = useRef<HTMLInputElement>(null);
+
+    /** Uses an audio file (e.g. a voice note recorded on a phone) instead of the microphone. */
+    const pickFile = async (file: File | undefined) => {
+        if (fileInput.current) fileInput.current.value = '';
+        if (!file) return;
+        stop();
+        if (file.size > 20 * 1024 * 1024) return toast('That file is bigger than 20 MB. Use a shorter clip.', 'error');
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const ctx = new AudioContext();
+            const audio = await ctx.decodeAudioData(await file.arrayBuffer());
+            ctx.close();
+            const s = Math.floor(audio.duration);
+            if (s > 300) return toast('That clip is longer than 5 minutes. 1 to 2 minutes gives the best clone.', 'error');
+            setSecs(s);
+            setBlob(file);
+        } catch {
+            toast('Could not read that audio file. Try an MP3, M4A, WAV, OGG or WebM file.', 'error');
+        }
+    };
+
+    const startRec = async () => {
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+            return toast('The browser only allows the microphone on a secure (https) link. Open the site with https, or upload a recording instead.', 'error');
+        }
+        if (typeof MediaRecorder === 'undefined') {
+            return toast('This browser cannot record audio. Use Chrome, Edge or Safari, or upload a recording instead.', 'error');
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
             const mr = new MediaRecorder(stream);
             const chunks: BlobPart[] = [];
             mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
@@ -478,15 +505,26 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
             setSecs(0);
             setRecording(true);
             draw();
-        } catch {
-            toast('Microphone access was blocked. Allow it in your browser and try again.', 'error');
+        } catch (e) {
+            const name = (e as DOMException)?.name;
+            toast(
+                name === 'NotFoundError' || name === 'OverconstrainedError'
+                    ? 'No microphone found on this device. Plug in a mic or headset, or upload a recording made on your phone.'
+                    : name === 'NotReadableError' || name === 'AbortError'
+                      ? 'Your microphone is being used by another app (Zoom, Teams, WhatsApp). Close it and try again.'
+                      : name === 'NotAllowedError' || name === 'SecurityError'
+                        ? 'Microphone access is blocked. Click the icon next to the web address, allow the microphone, then try again.'
+                        : 'Could not start the microphone. Try again, or upload a recording instead.',
+                'error',
+            );
         }
     };
 
     const submit = () => {
         if (!blob) return;
         const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
-        form.transform((d) => ({ ...d, seconds: secs, sample: new File([blob], `sample.${ext}`, { type: blob.type }) }));
+        const sample = blob instanceof File ? blob : new File([blob], `sample.${ext}`, { type: blob.type });
+        form.transform((d) => ({ ...d, seconds: secs, sample }));
         form.post('/voices', { forceFormData: true, preserveScroll: true, onSuccess: () => onClose() });
     };
 
@@ -523,7 +561,17 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
                     ))}
                 </div>
                 <div className="rec-hint">{hint}</div>
+                {blob instanceof File && <div className="rec-hint">Using file: {blob.name}</div>}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={recording}>
+                    <Icon name="upload" className="i i-sm" />
+                    No microphone? Upload a recording
+                </button>
+                <input ref={fileInput} type="file" accept="audio/*,.m4a,.opus" hidden onChange={(e) => pickFile(e.target.files?.[0])} />
                 <FieldError msg={form.errors.sample || form.errors.seconds} />
+            </div>
+            <div className="rec-script">
+                <b>Not sure what to say? Read this:</b> "Hi, thanks for calling. We are open every day from ten in the morning until nine at night. You can book an appointment, ask about our prices, or place an order, and I will note down everything you need. If I can't answer something, I will make sure the right person calls you back. Is there anything else I can help you with today?"
+                <small>1 to 2 minutes in a quiet room gives the best result.</small>
             </div>
             <div className="field">
                 <label htmlFor="vname">Voice name</label>

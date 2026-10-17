@@ -17,7 +17,8 @@ class VoiceController extends Controller
         $user = $request->user();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:60'],
-            'sample' => ['required', 'file', 'max:20480', 'mimetypes:audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/webm'],
+            // Safari/iPhone record MP4/M4A (often detected as video/mp4); phone voice notes are M4A, AAC or OGG/Opus.
+            'sample' => ['required', 'file', 'max:20480', 'mimetypes:audio/webm,audio/ogg,audio/opus,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/x-hx-aac-adts,audio/flac,audio/x-flac,video/webm,video/mp4'],
             'seconds' => ['required', 'integer', 'min:'.config('hamsukhan.min_clone_seconds'), 'max:300'],
             'consent' => ['accepted'],
         ]);
