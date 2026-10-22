@@ -16,7 +16,8 @@ type Props = {
 /** Server-side filtering + pagination; the URL holds the filters so links and refresh keep them. */
 export default function CallLogs({ calls, filters, summary }: Props) {
     const [q, setQ] = useState(filters.q);
-    const [openCall, setOpenCall] = useState<number | null>(null);
+    // /calls?call=ID (links from Insights and alerts) opens that call's drawer directly.
+    const [openCall, setOpenCall] = useState<number | null>(() => Number(new URLSearchParams(window.location.search).get('call')) || null);
     const first = useRef(true);
 
     const visit = (next: Partial<Filters> & { page?: number }) => {

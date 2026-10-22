@@ -6,7 +6,7 @@ import { Seg } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
 import { fmtDate } from '@/lib/format';
 
-type Status = 'new' | 'confirmed' | 'done';
+type Status = 'new' | 'contacted' | 'confirmed' | 'done' | 'lost' | 'spam';
 type Props = {
     bookings: {
         id: number;
@@ -60,8 +60,11 @@ export default function Bookings({ bookings, filter, counts }: Props) {
                         options={[
                             { value: '', label: 'All' },
                             { value: 'new', label: `New (${counts.new})` },
+                            { value: 'contacted', label: 'Contacted' },
                             { value: 'confirmed', label: 'Confirmed' },
                             { value: 'done', label: 'Done' },
+                            { value: 'lost', label: 'Lost' },
+                            { value: 'spam', label: 'Spam' },
                         ]}
                     />
                     <div style={{ flex: 1 }} />
@@ -133,8 +136,11 @@ export default function Bookings({ bookings, filter, counts }: Props) {
                                             onChange={(e) => router.patch(`/bookings/${b.id}`, { status: e.target.value }, { preserveScroll: true, preserveState: true })}
                                         >
                                             <option value="new">New</option>
-                                            <option value="confirmed">Confirmed</option>
-                                            <option value="done">Done</option>
+                                            <option value="contacted">Contacted</option>
+                                            <option value="confirmed">Confirmed (booked)</option>
+                                            <option value="done">Done (won)</option>
+                                            <option value="lost">Lost</option>
+                                            <option value="spam">Spam</option>
                                         </select>
                                     </td>
                                     <td className="r">

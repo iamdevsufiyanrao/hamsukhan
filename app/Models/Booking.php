@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Booking extends Model
 {
-    public const STATUSES = ['new', 'confirmed', 'done'];
+    /** Lead pipeline: new, contacted, confirmed (booked), done (won), lost, spam. */
+    public const STATUSES = ['new', 'contacted', 'confirmed', 'done', 'lost', 'spam'];
 
     public const TYPES = ['booking', 'order', 'callback'];
 

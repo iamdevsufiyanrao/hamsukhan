@@ -29,6 +29,7 @@ class HandleInertiaRequests extends Middleware
                     'initials' => $user->initials(),
                     'avatarUrl' => $user->avatarUrl(),
                     'isAdmin' => $user->is_admin,
+                    'verified' => $user->hasVerifiedEmail(),
                 ],
                 'wallet' => [
                     'balance' => (float) $user->balance,

@@ -164,3 +164,13 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - **Preset voices** map to real ElevenLabs premade voice ids (`config/hamsukhan.php`). Urdu / mixed calls use ElevenLabs Scribe as transcriber (Deepgram has no Urdu).
 - **Safety rules** (`Bot::SAFETY_RULES`) are appended server-side to every prompt.
 - **Admin → ElevenLabs voices:** lists voices in the ElevenLabs account and assigns one to a customer (`provider = elevenlabs_import`, never deleted on ElevenLabs when the customer removes it).
+
+## Pilot features (2026-10-22)
+- **Owner alerts** (`NotificationService`): new lead (call or callback form; not for test calls), low balance (highest threshold in `notifications.low_balance_thresholds`, once per top-up), monthly cap reached (once per month), connector delivery failed for good, daily summary at 21:00 PKT (only on days with activity). Channels: email (`notify_email`) and WhatsApp Cloud API (`notify_whatsapp` + `whatsapp_number`, needs platform token). `notification_logs` unique (dedupe_key, channel) = never sent twice; a failed alert is logged, never breaks a call.
+- **Monthly spending cap** (`users.monthly_cap`, USD, entered in PKR): `maxAffordableSeconds` also caps by what is left this month; at zero the widget answers 402 `cap_reached`.
+- **Opening hours + holidays** (`bots.business_hours`, `bots.holidays`, `BusinessHours`): written into the prompt; calls outside them get `calls.after_hours`.
+- **Allowed websites** (`bots.allowed_domains`): widget config/start/callback refuse other origins (403). Our own app host and localhost are always allowed.
+- **Knowledge gaps**: Vapi structured data `unansweredQuestions` → `calls.unanswered` → Insights page.
+- **Lead statuses**: new, contacted, confirmed (booked), done (won), lost, spam.
+- **Email verification**: always sent on signup; enforced only when Admin → Site → "Require email verification" is on. Accounts that existed before 2026-10-22 were marked verified.
+- **Ops**: every response has `X-Request-Id` (also in log context); unexpected production errors are emailed to `alert_email` (same error once per 30 min).

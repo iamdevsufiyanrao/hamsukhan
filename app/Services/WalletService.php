@@ -21,12 +21,46 @@ class WalletService
         return round($seconds * config('hamsukhan.rate_per_minute') / 60, 4);
     }
 
-    /** Longest call (in seconds) the current balance can pay for, capped by the bot's max length. */
+    /**
+     * Longest call (in seconds) the owner can pay for: the bot's max length, the wallet balance,
+     * and what is left of the owner's monthly spending cap.
+     */
     public function maxAffordableSeconds(User $user, int $capMinutes): int
     {
         $perSecond = config('hamsukhan.rate_per_minute') / 60;
+        $money = (float) $user->balance;
+        if ($user->monthly_cap !== null) {
+            $money = min($money, max(0, (float) $user->monthly_cap - $this->spentThisMonth($user)));
+        }
 
-        return (int) min($capMinutes * 60, floor((float) $user->balance / $perSecond));
+        return (int) max(0, min($capMinutes * 60, floor($money / $perSecond)));
+    }
+
+    /** Call charges in the owner's current calendar month (their timezone), as a positive amount. */
+    public function spentThisMonth(User $user): float
+    {
+        $start = now($user->timezone)->startOfMonth()->utc();
+
+        return round(-(float) $user->transactions()->where('type', 'call_charge')->where('created_at', '>=', $start)->sum('amount'), 4);
+    }
+
+    /** After a charge: low-balance and spending-cap alerts (each one is sent once, see NotificationService). */
+    public function checkAlerts(?User $user): void
+    {
+        if (! $user) {
+            return;
+        }
+        $user->refresh();
+        $notify = app(NotificationService::class);
+        foreach (config('hamsukhan.notifications.low_balance_thresholds', []) as $threshold) {
+            if ((float) $user->balance < $threshold) {
+                $notify->lowBalance($user, (float) $threshold);
+                break; // only the highest threshold crossed
+            }
+        }
+        if ($user->monthly_cap !== null && $this->spentThisMonth($user) >= (float) $user->monthly_cap) {
+            $notify->capReached($user);
+        }
     }
 
     public function approveTopUp(TopUp $topUp, User $admin, ?string $note = null): WalletTransaction

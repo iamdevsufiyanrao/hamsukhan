@@ -21,7 +21,10 @@ use App\Http\Controllers\TestCallController;
 use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\VoiceSampleController;
 use App\Http\Middleware\EnsureAdmin;
+use App\Http\Controllers\EmailVerificationController;
+use App\Http\Controllers\InsightsController;
 use App\Http\Middleware\EnsureBot;
+use App\Http\Middleware\EnsureEmailVerified;
 use App\Http\Middleware\EnsureNotSuspended;
 use Illuminate\Support\Facades\Route;
 
@@ -47,10 +50,15 @@ Route::middleware('guest')->group(function () {
 // ---------- Any signed-in user ----------
 Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware('throttle:3,1')->name('verification.send');
     Route::post('/impersonation/stop', [AccountController::class, 'stopImpersonating'])->name('impersonation.stop');
 
     Route::get('/settings', [SettingsController::class, 'show'])->name('settings');
     Route::patch('/settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
+    Route::patch('/settings/notifications', [SettingsController::class, 'updateNotifications'])->name('settings.notifications');
+    Route::post('/settings/notifications/test', [SettingsController::class, 'testNotification'])->middleware('throttle:3,1')->name('settings.notifications.test');
     Route::post('/settings/avatar', [SettingsController::class, 'updateAvatar'])->name('settings.avatar');
     Route::delete('/settings/avatar', [SettingsController::class, 'destroyAvatar'])->name('settings.avatar.destroy');
     Route::put('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
@@ -96,7 +104,7 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
 });
 
 // ---------- Customer app (needs a bot) ----------
-Route::middleware(['auth', EnsureNotSuspended::class, EnsureBot::class])->group(function () {
+Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class, EnsureBot::class])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('/bot-studio', [BotStudioController::class, 'show'])->name('bot-studio');
@@ -105,7 +113,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureBot::class])->group(
     Route::patch('/bot-studio/voice', [BotStudioController::class, 'updateVoice'])->name('bot.voice');
     Route::patch('/bot-studio/knowledge', [BotStudioController::class, 'updateKnowledge'])->name('bot.knowledge');
     Route::patch('/bot-studio/widget', [BotStudioController::class, 'updateWidget'])->name('bot.widget');
-    Route::post('/bot-studio/sync', [BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
+    Route::patch('/bot-studio/hours', [BotStudioController::class, 'updateHours'])->name('bot.hours');
+    Route::patch('/bot-studio/domains', [BotStudioController::class, 'updateDomains'])->name('bot.domains');
+    Route::post('/bot-studio/sync',[BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
 
     Route::post('/voices', [VoiceController::class, 'store'])->middleware('throttle:10,1')->name('voices.store');
     Route::post('/voices/{voice}/push', [VoiceController::class, 'push'])->middleware('throttle:10,1')->name('voices.push');
@@ -121,6 +131,7 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureBot::class])->group(
     Route::post('/test-call/finish', TestCallController::class)->name('test-call.finish');
 
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings');
+    Route::get('/insights', InsightsController::class)->name('insights');
     Route::patch('/bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
 
     Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations');

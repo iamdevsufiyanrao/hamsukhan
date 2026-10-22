@@ -3,11 +3,89 @@ import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { Avatar, FieldError, Modal, PasswordInput } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
+import { timeAgo } from '@/lib/format';
 import type { SharedProps } from '@/types';
 
-type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[] };
+type Notifications = {
+    email: boolean;
+    whatsapp: boolean;
+    whatsappNumber: string | null;
+    dailySummary: boolean;
+    monthlyCapPkr: number | null;
+    spentThisMonthPkr: number;
+    whatsappAvailable: boolean;
+    recent: { kind: string; channel: string; status: string; error: string | null; at: string }[];
+};
+type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications };
 
-export default function Settings({ profile, timezones }: Props) {
+const KIND_LABEL: Record<string, string> = { lead: 'New lead', low_balance: 'Low balance', daily_summary: 'Daily summary', integration_failed: 'Connector failed', cap_reached: 'Spending limit' };
+
+/** Where lead alerts go, and the monthly spending limit. */
+function NotificationsSection({ n }: { n: Notifications }) {
+    const form = useForm({ email: n.email, whatsapp: n.whatsapp, whatsappNumber: n.whatsappNumber ?? '', dailySummary: n.dailySummary, monthlyCapPkr: n.monthlyCapPkr === null ? '' : String(n.monthlyCapPkr) });
+    const save = () => {
+        form.transform((d) => ({ ...d, monthlyCapPkr: d.monthlyCapPkr === '' ? null : Number(d.monthlyCapPkr) }));
+        form.patch('/settings/notifications', { preserveScroll: true, onSuccess: () => form.setDefaults() });
+    };
+
+    return (
+        <div className="set-grid">
+            <div>
+                <h4>Alerts and spending limit</h4>
+                <p>Get every new booking, callback request and low-balance warning on email or WhatsApp. The limit pauses your assistant once a month's calls cost that much.</p>
+            </div>
+            <div className="stack" style={{ maxWidth: 520 }}>
+                <label className="check" style={{ marginTop: 0 }}>
+                    <input type="checkbox" checked={form.data.email} onChange={(e) => form.setData('email', e.target.checked)} />
+                    <span>Email me new leads and alerts</span>
+                </label>
+                <label className="check" style={{ marginTop: 0 }}>
+                    <input type="checkbox" checked={form.data.whatsapp} disabled={!n.whatsappAvailable && !form.data.whatsapp} onChange={(e) => form.setData('whatsapp', e.target.checked)} />
+                    <span>WhatsApp me new leads and alerts{!n.whatsappAvailable && ' (not switched on for the platform yet)'}</span>
+                </label>
+                {form.data.whatsapp && (
+                    <div className="field">
+                        <label htmlFor="wa">WhatsApp number</label>
+                        <input id="wa" className={'input' + (form.errors.whatsappNumber ? ' bad' : '')} type="tel" placeholder="0300 1234567" value={form.data.whatsappNumber} onChange={(e) => form.setData('whatsappNumber', e.target.value)} />
+                        <FieldError msg={form.errors.whatsappNumber} />
+                    </div>
+                )}
+                <label className="check" style={{ marginTop: 0 }}>
+                    <input type="checkbox" checked={form.data.dailySummary} onChange={(e) => form.setData('dailySummary', e.target.checked)} />
+                    <span>Daily summary at 9 PM (only on days with calls or leads)</span>
+                </label>
+                <div className="field">
+                    <label htmlFor="cap">Monthly spending limit (Rs)</label>
+                    <input id="cap" className={'input' + (form.errors.monthlyCapPkr ? ' bad' : '')} type="number" min={500} step={100} placeholder="No limit" value={form.data.monthlyCapPkr} onChange={(e) => form.setData('monthlyCapPkr', e.target.value)} />
+                    <span className="hint">Spent this month: Rs {n.spentThisMonthPkr.toLocaleString('en-PK')}. Leave empty for no limit.</span>
+                    <FieldError msg={form.errors.monthlyCapPkr} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary" disabled={!form.isDirty || form.processing} onClick={save}>
+                        Save alerts
+                    </button>
+                    <button className="btn btn-ghost" disabled={form.isDirty} onClick={() => router.post('/settings/notifications/test', {}, { preserveScroll: true })}>
+                        <Icon name="send" className="i i-sm" />
+                        Send a test alert
+                    </button>
+                </div>
+                {n.recent.length > 0 && (
+                    <div className="hint" style={{ display: 'grid', gap: 2 }}>
+                        <b>Recent alerts</b>
+                        {n.recent.map((r, i) => (
+                            <span key={i} style={r.status === 'failed' ? { color: 'var(--danger)' } : undefined}>
+                                {KIND_LABEL[r.kind] ?? r.kind} · {r.channel} · {r.status}
+                                {r.error ? `: ${r.error}` : ''} · {timeAgo(r.at)}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function Settings({ profile, timezones, notifications }: Props) {
     const { auth } = usePage<SharedProps>().props;
     const user = auth!.user;
     const info = useForm(profile);
@@ -93,6 +171,8 @@ export default function Settings({ profile, timezones }: Props) {
                             </div>
                         </form>
                     </div>
+
+                    {auth?.bot && <NotificationsSection n={notifications} />}
 
                     <div className="set-grid">
                         <div>

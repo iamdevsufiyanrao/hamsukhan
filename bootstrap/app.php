@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RequestId;
 use App\Http\Middleware\SecurityHeaders;
+use App\Support\ErrorAlert;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(RequestId::class);
         $middleware->append(SecurityHeaders::class);
         $middleware->web(append: [
             HandleInertiaRequests::class,
@@ -26,4 +29,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+        // Email the platform owner about unexpected errors in production (throttled, see ErrorAlert).
+        $exceptions->report(fn (Throwable $e) => ErrorAlert::report($e));
     })->create();

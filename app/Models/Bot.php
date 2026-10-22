@@ -12,7 +12,7 @@ class Bot extends Model
     protected $fillable = [
         'business_name', 'website', 'greeting', 'end_message', 'language', 'prompt', 'quick_facts', 'capture_fields',
         'max_call_minutes', 'voice_id', 'preset_voice', 'widget', 'vapi_assistant_id', 'synced_at',
-        'is_active', 'installed_at',
+        'is_active', 'installed_at', 'allowed_domains', 'business_hours', 'holidays',
     ];
 
     protected function casts(): array
@@ -20,6 +20,9 @@ class Bot extends Model
         return [
             'widget' => 'array',
             'capture_fields' => 'array',
+            'allowed_domains' => 'array',
+            'business_hours' => 'array',
+            'holidays' => 'array',
             'is_active' => 'boolean',
             'synced_at' => 'datetime',
             'installed_at' => 'datetime',
@@ -80,6 +83,18 @@ class Bot extends Model
         return $this->hasMany(KnowledgeFile::class);
     }
 
+    /** The widget may run on this page's host: no allow-list, our own app, local testing, or a listed domain / its subdomain. */
+    public function allowsOrigin(?string $origin): bool
+    {
+        $list = array_filter($this->allowed_domains ?? []);
+        $host = strtolower((string) parse_url((string) $origin, PHP_URL_HOST));
+        if (! $list || $host === '' || $host === strtolower((string) parse_url(config('app.url'), PHP_URL_HOST)) || in_array($host, ['localhost', '127.0.0.1'], true)) {
+            return true;
+        }
+
+        return collect($list)->contains(fn ($d) => $host === $d || str_ends_with($host, '.'.$d));
+    }
+
     public function voiceLabel(): string
     {
         if ($this->voice) {
@@ -113,11 +128,13 @@ class Bot extends Model
     {
         $facts = trim((string) $this->quick_facts);
         $collect = \App\Support\CaptureFields::promptHint($this->capture_fields ?? []);
+        $hours = \App\Support\BusinessHours::promptText($this);
 
         return ($this->business_name ? "Business: {$this->business_name}\n\n" : '')
             .trim($this->prompt)
             .($collect !== '' ? "\n\n".$collect : '')
             .($facts !== '' ? "\n\nFacts you must know:\n".$facts : '')
+            .($hours !== '' ? "\n\n".$hours : '')
             ."\n\n".self::SAFETY_RULES
             ."\n\n".'Today is {{"now" | date: "%A %d %B %Y, %I:%M %p", "Asia/Karachi"}} (Pakistan time).'; // Vapi fills this in per call
     }

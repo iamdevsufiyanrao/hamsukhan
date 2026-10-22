@@ -31,6 +31,9 @@ type Props = {
         installedAt: string | null;
         syncError: string | null;
         live: boolean;
+        hours: Record<string, { open: string; close: string } | null> | null;
+        holidays: { date: string; note: string }[];
+        allowedDomains: string[];
     };
     providers: { vapi: boolean; elevenlabs: boolean };
     voices: { id: number; name: string; createdAt: string; seconds: number; status: string; hasSample: boolean; pending: boolean }[];
@@ -108,13 +111,19 @@ export default function BotStudio(props: Props) {
                     {tab === 'configure' && (
                         <div className="stack">
                             <ConfigurePane bot={bot} languages={props.options.languages} />
+                            <HoursCard hours={bot.hours} holidays={bot.holidays} />
                             <CaptureFieldsCard fields={bot.captureFields} types={props.options.fieldTypes} presets={props.options.fieldPresets} />
                         </div>
                     )}
                     {tab === 'voice' && <VoicePane bot={bot} voices={props.voices} options={props.options} />}
                     {tab === 'knowledge' && <KnowledgePane files={props.files} quickFacts={bot.quickFacts} />}
                     {tab === 'widget' && <WidgetPane form={widget} wState={previewState} setWState={setPreviewState} />}
-                    {tab === 'embed' && <EmbedPane src={props.embedSrc} publicKey={bot.publicKey} installedAt={bot.installedAt} />}
+                    {tab === 'embed' && (
+                        <>
+                            <EmbedPane src={props.embedSrc} publicKey={bot.publicKey} installedAt={bot.installedAt} />
+                            <DomainsCard domains={bot.allowedDomains} />
+                        </>
+                    )}
                 </div>
 
                 <div className="card preview-card">
@@ -902,6 +911,127 @@ function EmbedPane({ src, publicKey, installedAt }: { src: string; publicKey: st
                     <div>
                         <b>3</b>Reload your site. The call button appears in the position you set.
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ---------- Opening hours ---------- */
+type DayHours = { open: string; close: string } | null;
+const DAYS: [string, string][] = [
+    ['mon', 'Monday'],
+    ['tue', 'Tuesday'],
+    ['wed', 'Wednesday'],
+    ['thu', 'Thursday'],
+    ['fri', 'Friday'],
+    ['sat', 'Saturday'],
+    ['sun', 'Sunday'],
+];
+
+function HoursCard({ hours, holidays }: { hours: Record<string, DayHours> | null; holidays: { date: string; note: string }[] }) {
+    const initial = Object.fromEntries(DAYS.map(([d]) => [d, hours?.[d] ? { open: hours[d]!.open, close: hours[d]!.close, closed: false } : { open: '10:00', close: '21:00', closed: !!hours }]));
+    const form = useForm<{ hours: Record<string, { open: string; close: string; closed: boolean }>; holidays: { date: string; note: string }[] }>({ hours: initial, holidays });
+    const setDay = (d: string, patch: Partial<{ open: string; close: string; closed: boolean }>) => form.setData('hours', { ...form.data.hours, [d]: { ...form.data.hours[d], ...patch } });
+
+    return (
+        <div className="card">
+            <div className="card-h">
+                <div>
+                    <h3>Opening hours</h3>
+                    <p>Pakistan time. Your bot uses these to answer &quot;are you open?&quot; and to offer slots only when you are open.</p>
+                </div>
+            </div>
+            <div className="card-b stack">
+                {!hours && <div className="notice">No hours set yet, so your bot does not mention them. Save to switch them on.</div>}
+                <div style={{ display: 'grid', gap: 8 }}>
+                    {DAYS.map(([d, label]) => {
+                        const h = form.data.hours[d];
+                        return (
+                            <div key={d} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <b style={{ width: 96 }}>{label}</b>
+                                <label className="check" style={{ margin: 0 }}>
+                                    <input type="checkbox" checked={!h.closed} onChange={(e) => setDay(d, { closed: !e.target.checked })} />
+                                    <span>Open</span>
+                                </label>
+                                {!h.closed && (
+                                    <>
+                                        <input className="input" type="time" style={{ width: 130 }} value={h.open} onChange={(e) => setDay(d, { open: e.target.value })} aria-label={`${label} opens`} />
+                                        <span>to</span>
+                                        <input className="input" type="time" style={{ width: 130 }} value={h.close} onChange={(e) => setDay(d, { close: e.target.value })} aria-label={`${label} closes`} />
+                                    </>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                <div>
+                    <div className="section-t">Closed on (holidays, Eid, events)</div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                        {form.data.holidays.map((h, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <input className="input" type="date" style={{ width: 170 }} value={h.date} onChange={(e) => form.setData('holidays', form.data.holidays.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} />
+                                <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="e.g. Eid ul Adha" maxLength={60} value={h.note} onChange={(e) => form.setData('holidays', form.data.holidays.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} />
+                                <button className="btn btn-ghost btn-sm" title="Remove" onClick={() => form.setData('holidays', form.data.holidays.filter((_, j) => j !== i))}>
+                                    <Icon name="trash" className="i i-sm" />
+                                </button>
+                            </div>
+                        ))}
+                        <button className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => form.setData('holidays', [...form.data.holidays, { date: '', note: '' }])}>
+                            <Icon name="plus" className="i i-sm" />
+                            Add a closed day
+                        </button>
+                    </div>
+                    <FieldError msg={Object.entries(form.errors as Record<string, string>).find(([k]) => k.startsWith('holidays'))?.[1]} />
+                </div>
+                <div className="form-foot">
+                    <span>{form.isDirty ? 'Unsaved changes' : 'Saved'}</span>
+                    <button
+                        className="btn btn-primary"
+                        disabled={!form.isDirty || form.processing}
+                        onClick={() => {
+                            form.transform((d) => ({ ...d, holidays: d.holidays.filter((h) => h.date) }));
+                            form.patch('/bot-studio/hours', { preserveScroll: true, onSuccess: () => form.setDefaults() });
+                        }}
+                    >
+                        Save hours
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ---------- Allowed websites ---------- */
+function DomainsCard({ domains }: { domains: string[] }) {
+    const form = useForm({ domains: domains.length ? domains : [''] });
+
+    return (
+        <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-h">
+                <div>
+                    <h3>Allowed websites</h3>
+                    <p>Only these sites (and their subdomains) can show your call button, so nobody can copy your code and spend your balance. Leave empty to allow any site.</p>
+                </div>
+            </div>
+            <div className="card-b stack">
+                {form.data.domains.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8 }}>
+                        <input className="input mono" placeholder="mysalon.pk" value={d} onChange={(e) => form.setData('domains', form.data.domains.map((x, j) => (j === i ? e.target.value : x)))} />
+                        <button className="btn btn-ghost btn-sm" title="Remove" onClick={() => form.setData('domains', form.data.domains.filter((_, j) => j !== i))}>
+                            <Icon name="trash" className="i i-sm" />
+                        </button>
+                    </div>
+                ))}
+                <FieldError msg={form.errors.domains} />
+                <div className="form-foot">
+                    <button className="btn btn-ghost btn-sm" disabled={form.data.domains.length >= 10} onClick={() => form.setData('domains', [...form.data.domains, ''])}>
+                        <Icon name="plus" className="i i-sm" />
+                        Add website
+                    </button>
+                    <button className="btn btn-primary" disabled={!form.isDirty || form.processing} onClick={() => form.patch('/bot-studio/domains', { preserveScroll: true, onSuccess: () => form.setDefaults() })}>
+                        Save websites
+                    </button>
                 </div>
             </div>
         </div>

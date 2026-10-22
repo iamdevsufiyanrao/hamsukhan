@@ -7,7 +7,7 @@ import { timeAgo } from '@/lib/format';
 
 type Secret = { set: boolean; hint: string | null; source: 'admin' | 'env' | null };
 type Values = Record<string, any>;
-type Tab = 'site' | 'seo' | 'billing' | 'providers' | 'plugins' | 'system';
+type Tab = 'site' | 'seo' | 'billing' | 'mail' | 'providers' | 'plugins' | 'system';
 type Props = {
     tab: Tab;
     values: Values;
@@ -28,6 +28,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
     { id: 'site', label: 'Site', icon: 'home' },
     { id: 'seo', label: 'SEO', icon: 'search' },
     { id: 'billing', label: 'Billing', icon: 'wallet' },
+    { id: 'mail', label: 'Email', icon: 'mail' },
     { id: 'providers', label: 'API keys', icon: 'key' },
     { id: 'plugins', label: 'Plugins', icon: 'plug' },
     { id: 'system', label: 'Cron & system', icon: 'clock' },
@@ -54,6 +55,7 @@ export default function Settings(props: Props) {
             {tab === 'site' && <SiteTab values={props.values} />}
             {tab === 'seo' && <SeoTab values={props.values} />}
             {tab === 'billing' && <BillingTab values={props.values} />}
+            {tab === 'mail' && <MailTab values={props.values} />}
             {tab === 'providers' && <ProvidersTab values={props.values} webhookUrl={props.system.webhookUrl} />}
             {tab === 'plugins' && <PluginsTab values={props.values} plugins={props.plugins} />}
             {tab === 'system' && <SystemTab system={props.system} />}
@@ -123,7 +125,7 @@ function Card({ title, desc, children, form, save }: { title: string; desc: stri
 
 /* ---------- tabs ---------- */
 function SiteTab({ values }: { values: Values }) {
-    const { form, save } = useGroupForm('site', ['site_name', 'support_email', 'support_phone', 'whatsapp_number', 'demo_bot_key', 'allow_signups', 'announcement', 'terms_url', 'privacy_url'], values);
+    const { form, save } = useGroupForm('site', ['site_name', 'support_email', 'support_phone', 'whatsapp_number', 'demo_bot_key', 'alert_email', 'allow_signups', 'require_email_verification', 'announcement', 'terms_url', 'privacy_url'], values);
     return (
         <Card title="Site" desc="Name, contact details and sign-up rules for the whole platform." form={form} save={save}>
             <Text form={form} k="site_name" label="Site name" hint="Shown in browser tabs and emails." />
@@ -134,7 +136,10 @@ function SiteTab({ values }: { values: Values }) {
             <Text form={form} k="terms_url" label="External Terms URL (optional)" placeholder="https://…" hint="Leave empty to use the built-in /terms page." />
             <Text form={form} k="privacy_url" label="External Privacy URL (optional)" placeholder="https://…" hint="Leave empty to use the built-in /privacy page." />
             <Text form={form} k="announcement" label="Announcement banner" type="textarea" placeholder="e.g. Scheduled maintenance on Sunday 2–3am" hint="Shown at the top of every customer's dashboard. Leave empty to hide." wide />
+            <Text form={form} k="alert_email" label="Error alerts to" type="email" placeholder="you@company.com" hint="Gets an email when the app hits an unexpected error (same error at most every 30 minutes). Falls back to the support email." />
+            <div />
             <Toggle form={form} k="allow_signups" label="Allow new sign-ups" hint="Turn off to stop new accounts (existing customers can still log in)." />
+            <Toggle form={form} k="require_email_verification" label="Require email verification" hint="New customers must click the link in their email before using the dashboard. Switch on only after the Email tab's test works." />
         </Card>
     );
 }
@@ -189,9 +194,67 @@ function BillingTab({ values }: { values: Values }) {
     );
 }
 
+function MailTab({ values }: { values: Values }) {
+    const plain = ['mail_mailer', 'mail_host', 'mail_port', 'mail_scheme', 'mail_username', 'mail_from_address', 'mail_from_name'];
+    const form = useForm<Values>({ ...Object.fromEntries(plain.map((k) => [k, values[k] ?? ''])), mail_password: '' });
+    const pw: Secret = values.mail_password;
+    const save = () => form.patch('/admin/settings/mail', { preserveScroll: true, onSuccess: () => form.setData('mail_password', '') });
+
+    return (
+        <div className="card">
+            <div className="card-h">
+                <div>
+                    <h3>Outgoing email</h3>
+                    <p>Used for lead alerts, verification links, password resets and error alerts. Hostinger: hPanel → Emails → your mailbox; host smtp.hostinger.com, port 465, security SSL.</p>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => router.post('/admin/settings/test/mail', {}, { preserveScroll: true })}>
+                    <Icon name="send" className="i i-sm" />
+                    Send test email to me
+                </button>
+            </div>
+            <div className="card-b stack">
+                <div className="grid-2">
+                    <div className="field">
+                        <label htmlFor="mail_mailer">Send with</label>
+                        <select id="mail_mailer" className="select" value={form.data.mail_mailer || 'log'} onChange={(e) => form.setData('mail_mailer', e.target.value)}>
+                            <option value="smtp">SMTP (real email)</option>
+                            <option value="log">Log only (nothing is sent)</option>
+                        </select>
+                    </div>
+                    <Text form={form} k="mail_host" label="SMTP host" placeholder="smtp.hostinger.com" />
+                    <Text form={form} k="mail_port" label="Port" type="number" placeholder="465" />
+                    <div className="field">
+                        <label htmlFor="mail_scheme">Security</label>
+                        <select id="mail_scheme" className="select" value={form.data.mail_scheme || 'smtps'} onChange={(e) => form.setData('mail_scheme', e.target.value)}>
+                            <option value="smtps">SSL (port 465)</option>
+                            <option value="smtp">STARTTLS / none (port 587 or 25)</option>
+                        </select>
+                    </div>
+                    <Text form={form} k="mail_username" label="Username (mailbox address)" placeholder="alerts@yourdomain.com" />
+                    <div className="field">
+                        <label htmlFor="mail_password">
+                            Password {pw?.set ? <span className="chip ok">set · {pw.hint}</span> : <span className="chip warn">not set</span>}
+                        </label>
+                        <input id="mail_password" className="input" type="password" autoComplete="off" placeholder={pw?.set ? 'Leave empty to keep the current password' : 'Mailbox password'} value={form.data.mail_password} onChange={(e) => form.setData('mail_password', e.target.value)} />
+                    </div>
+                    <Text form={form} k="mail_from_address" label="From address" type="email" placeholder="alerts@yourdomain.com" />
+                    <Text form={form} k="mail_from_name" label="From name" placeholder="Hamsukhan" />
+                </div>
+                <div className="form-foot">
+                    <span>{form.isDirty ? 'Unsaved changes' : 'Saved'}</span>
+                    <button className="btn btn-primary" disabled={!form.isDirty || form.processing} onClick={save}>
+                        Save email settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: string }) {
-    const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key'];
-    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model'];
+    const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key', 'whatsapp_token'];
+    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang'];
+    const [waTo, setWaTo] = useState('');
     const form = useForm<Values>({ ...Object.fromEntries(secretKeys.map((k) => [k, ''])), ...Object.fromEntries(plainKeys.map((k) => [k, values[k] ?? ''])) });
     const { toast } = useUI();
     const save = () => form.patch('/admin/settings/providers', { preserveScroll: true, onSuccess: () => form.setData(Object.fromEntries([...secretKeys.map((k) => [k, '']), ...plainKeys.map((k) => [k, form.data[k]])])) });
@@ -298,6 +361,41 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
                         <Icon name="wave" className="i i-sm" />
                         3. Voices in the ElevenLabs account
                     </Link>
+                </div>
+            </div>
+            <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-h">
+                    <div>
+                        <h3>WhatsApp: owner alerts</h3>
+                        <p>developers.facebook.com → your app → WhatsApp → API setup. Use a permanent (system user) token.</p>
+                    </div>
+                </div>
+                <div className="card-b grid-2">
+                    {SecretField({ k: 'whatsapp_token', label: 'Access token' })}
+                    <div className="field">
+                        <label htmlFor="whatsapp_phone_id">Phone number ID</label>
+                        <input id="whatsapp_phone_id" className="input mono" value={form.data.whatsapp_phone_id} onChange={(e) => form.setData('whatsapp_phone_id', e.target.value)} />
+                        <span className="hint">The ID of the sending number, not the number itself.</span>
+                    </div>
+                    <div className="field">
+                        <label htmlFor="whatsapp_template">Template name</label>
+                        <input id="whatsapp_template" className="input mono" placeholder="lead_alert" value={form.data.whatsapp_template} onChange={(e) => form.setData('whatsapp_template', e.target.value)} />
+                        <span className="hint">An approved Utility template with one body variable {'{{1}}'}. Without it, alerts only arrive if the owner messaged you in the last 24 hours.</span>
+                    </div>
+                    <div className="field">
+                        <label htmlFor="whatsapp_template_lang">Template language</label>
+                        <input id="whatsapp_template_lang" className="input mono" placeholder="en" value={form.data.whatsapp_template_lang} onChange={(e) => form.setData('whatsapp_template_lang', e.target.value)} />
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label htmlFor="wa_to">Send a test to</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input id="wa_to" className="input" type="tel" placeholder="0300 1234567" value={waTo} onChange={(e) => setWaTo(e.target.value)} />
+                            <button className="btn btn-ghost" disabled={!waTo || !values.whatsapp_token?.set} onClick={() => router.post('/admin/settings/test/whatsapp', { to: waTo }, { preserveScroll: true })}>
+                                <Icon name="send" className="i i-sm" />
+                                Send test
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div className="card" style={{ marginBottom: 16 }}>

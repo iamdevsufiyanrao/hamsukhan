@@ -143,6 +143,11 @@ class IntegrationDispatcher
         ]);
         $delivery->integration->update(['last_delivery_at' => now(), 'last_status' => $status]);
 
+        // A real booking that will never arrive in the owner's software: tell them (once per delivery).
+        if ($status === 'failed' && ! $delivery->is_test) {
+            app(\App\Services\NotificationService::class)->integrationFailed($delivery);
+        }
+
         return $delivery;
     }
 }

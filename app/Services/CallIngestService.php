@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Bot;
 use App\Models\Call;
 use App\Services\Integrations\IntegrationDispatcher;
+use App\Support\BusinessHours;
 use App\Support\CaptureFields;
 use App\Support\Phone;
 use Illuminate\Support\Arr;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  */
 class CallIngestService
 {
-    public function __construct(private WalletService $wallet, private IntegrationDispatcher $integrations) {}
+    public function __construct(private WalletService $wallet, private IntegrationDispatcher $integrations, private NotificationService $notifications) {}
 
     public function ingestEndOfCallReport(array $message): ?Call
     {
@@ -54,6 +55,9 @@ class CallIngestService
                 'cost' => Arr::get($message, 'call.metadata.isDemo') || $status === 'failed' ? 0 : $this->wallet->costFor($duration),
                 'recording_url' => Arr::get($message, 'recordingUrl') ?? Arr::get($message, 'artifact.recordingUrl'),
                 'summary' => Arr::get($message, 'analysis.summary') ?? Arr::get($message, 'summary'),
+                'unanswered' => collect((array) Arr::get($structured, 'unansweredQuestions', []))->filter(fn ($q) => is_string($q) && trim($q) !== '')
+                    ->map(fn ($q) => mb_substr(trim($q), 0, 200))->unique()->take(10)->values()->all() ?: null,
+                'after_hours' => BusinessHours::isOpen($bot, $started) === false,
             ]);
 
             foreach ($turns as $i => [$role, $text]) {
@@ -77,10 +81,14 @@ class CallIngestService
         });
 
         $this->wallet->chargeCall($call->setRelation('bot', $bot));
+        $this->wallet->checkAlerts($bot->user()->first());
 
-        // Push the booking/order into the customer's own software (their connectors).
+        // Push the booking/order into the customer's own software (their connectors) and alert the owner.
         if ($created = $call->booking()->first()) {
             $this->integrations->dispatchForBooking($created->setRelation('bot', $bot));
+            if (! $call->is_test) {
+                $this->notifications->lead($created);
+            }
         }
 
         return $call;

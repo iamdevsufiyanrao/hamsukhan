@@ -171,6 +171,11 @@ class VapiService
             'properties' => [
                 'title' => ['type' => 'string', 'description' => 'Short title of what the caller wanted, max 8 words'],
                 'outcome' => ['type' => 'string', 'enum' => config('hamsukhan.outcome_tags')],
+                'unansweredQuestions' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'Questions the caller asked that the assistant could not answer from its facts, or answered with uncertainty. Short, in the words of the caller. Empty if none.',
+                ],
                 'booking' => [
                     'type' => 'object',
                     'description' => 'Only if the caller booked, ordered or asked for a callback',

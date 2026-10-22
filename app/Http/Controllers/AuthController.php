@@ -83,8 +83,11 @@ class AuthController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
+        // A mail problem must not block signup; the dashboard banner offers "send again".
+        rescue(fn () => $user->sendEmailVerificationNotification());
 
-        return redirect()->route('dashboard')->with('success', 'Welcome to Hamsukhan! Start by writing your bot instructions.');
+        return redirect()->route(config('hamsukhan.site.require_email_verification') ? 'verification.notice' : 'dashboard')
+            ->with('success', 'Welcome to Hamsukhan! Check your inbox to verify your email.');
     }
 
     public function showForgot(): Response

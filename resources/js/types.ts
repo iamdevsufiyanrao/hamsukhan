@@ -21,7 +21,7 @@ export type CallDetail = CallRowData & {
 
 export type SharedProps = {
     auth: {
-        user: { name: string; firstName: string; email: string; initials: string; avatarUrl: string | null; isAdmin: boolean };
+        user: { name: string; firstName: string; email: string; initials: string; avatarUrl: string | null; isAdmin: boolean; verified: boolean };
         wallet: { balance: number; minutesLeft: number; low: boolean };
         badges: { newBookings: number; pendingTopUps: number; newMessages: number };
         bot: { publicKey: string } | null;

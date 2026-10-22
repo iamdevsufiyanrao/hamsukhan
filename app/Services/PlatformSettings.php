@@ -32,6 +32,17 @@ class PlatformSettings
         'privacy_url' => ['hamsukhan.site.privacy_url', 'url', false, 'site'],
         'whatsapp_number' => ['hamsukhan.site.whatsapp', 'string', false, 'site'],
         'demo_bot_key' => ['hamsukhan.demo.bot_key', 'string', false, 'site'],
+        'require_email_verification' => ['hamsukhan.site.require_email_verification', 'bool', false, 'site'],
+        'alert_email' => ['hamsukhan.site.alert_email', 'email', false, 'site'],
+        // Outgoing email (Hostinger mailbox: smtp.hostinger.com, port 465, scheme smtps)
+        'mail_mailer' => ['mail.default', 'string', false, 'mail'],
+        'mail_host' => ['mail.mailers.smtp.host', 'string', false, 'mail'],
+        'mail_port' => ['mail.mailers.smtp.port', 'number', false, 'mail'],
+        'mail_scheme' => ['mail.mailers.smtp.scheme', 'string', false, 'mail'],
+        'mail_username' => ['mail.mailers.smtp.username', 'string', false, 'mail'],
+        'mail_password' => ['mail.mailers.smtp.password', 'string', true, 'mail'],
+        'mail_from_address' => ['mail.from.address', 'email', false, 'mail'],
+        'mail_from_name' => ['mail.from.name', 'string', false, 'mail'],
         // SEO
         'seo_title' => ['hamsukhan.seo.title', 'string', false, 'seo'],
         'seo_description' => ['hamsukhan.seo.description', 'text', false, 'seo'],
@@ -58,6 +69,11 @@ class PlatformSettings
         'elevenlabs_api_key' => ['hamsukhan.elevenlabs.api_key', 'string', true, 'providers'],
         'elevenlabs_model' => ['hamsukhan.elevenlabs.model', 'string', false, 'providers'],
         'openai_api_key' => ['hamsukhan.openai.api_key', 'string', true, 'providers'],
+        // WhatsApp Cloud API (Meta) for owner alerts
+        'whatsapp_token' => ['hamsukhan.whatsapp.token', 'string', true, 'providers'],
+        'whatsapp_phone_id' => ['hamsukhan.whatsapp.phone_number_id', 'string', false, 'providers'],
+        'whatsapp_template' => ['hamsukhan.whatsapp.template', 'string', false, 'providers'],
+        'whatsapp_template_lang' => ['hamsukhan.whatsapp.template_lang', 'string', false, 'providers'],
         // Plugins / connectors
         'connectors_enabled' => ['hamsukhan.integrations.enabled', 'bool', false, 'plugins'],
         'form_connectors_enabled' => ['hamsukhan.integrations.form_enabled', 'bool', false, 'plugins'],

@@ -6,6 +6,7 @@ use App\Models\Bot;
 use App\Models\KnowledgeFile;
 use App\Models\Voice;
 use App\Services\VapiService;
+use App\Support\BusinessHours;
 use App\Support\CaptureFields;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,9 @@ class BotStudioController extends Controller
                 'publicKey' => $bot->public_key,
                 'installedAt' => $bot->installed_at?->toIso8601String(),
                 'syncError' => $bot->sync_error,
+                'hours' => $bot->business_hours,
+                'holidays' => $bot->holidays ?? [],
+                'allowedDomains' => $bot->allowed_domains ?? [],
                 'live' => $this->vapi->isLive($bot),
             ],
             'providers' => ['vapi' => $this->vapi->enabled(), 'elevenlabs' => app(\App\Services\ElevenLabsService::class)->enabled()],
@@ -151,6 +155,46 @@ class BotStudioController extends Controller
         $request->user()->bot->update(['widget' => $data]); // appearance only, no Vapi sync needed
 
         return back()->with('success', 'Widget saved');
+    }
+
+    /** Weekly opening hours + holiday closures (sent to the bot in its prompt). */
+    public function updateHours(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'hours' => ['present', 'array'],
+            'holidays' => ['present', 'array', 'max:60'],
+            'holidays.*.date' => ['required', 'date_format:Y-m-d'],
+            'holidays.*.note' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        return $this->save($request->user()->bot, [
+            'business_hours' => BusinessHours::normalize($data['hours']),
+            'holidays' => BusinessHours::normalizeHolidays($data['holidays']),
+        ], 'Opening hours saved, your bot knows them now');
+    }
+
+    /** Websites allowed to show the widget (empty = any). */
+    public function updateDomains(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['domains' => ['present', 'array', 'max:10'], 'domains.*' => ['nullable', 'string', 'max:120']]);
+
+        $domains = [];
+        foreach ($data['domains'] as $raw) {
+            $host = strtolower(trim((string) $raw));
+            if ($host === '') {
+                continue;
+            }
+            $host = (string) (parse_url(str_contains($host, '://') ? $host : "https://{$host}", PHP_URL_HOST) ?: '');
+            $host = preg_replace('/^www\./', '', $host);
+            if (! preg_match('/^(?=.{3,120}$)([a-z0-9-]+\.)+[a-z]{2,}$/', $host)) {
+                return back()->withErrors(['domains' => "\"{$raw}\" is not a valid domain, e.g. mysalon.pk"]);
+            }
+            $domains[] = $host;
+        }
+
+        $request->user()->bot->update(['allowed_domains' => array_values(array_unique($domains)) ?: null]); // widget-side only, no Vapi sync
+
+        return back()->with('success', $domains ? 'Allowed websites saved' : 'Widget allowed on any website');
     }
 
     /** "Retry" button in Bot Studio when the last sync with Vapi failed. */

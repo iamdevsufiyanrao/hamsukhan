@@ -16,8 +16,21 @@ class SettingsController extends Controller
 {
     public function show(Request $request): Response
     {
+        $user = $request->user();
+
         return Inertia::render('Settings', [
-            'profile' => ['name' => $request->user()->name, 'email' => $request->user()->email, 'timezone' => $request->user()->timezone],
+            'profile' => ['name' => $user->name, 'email' => $user->email, 'timezone' => $user->timezone],
+            'notifications' => [
+                'email' => $user->notify_email,
+                'whatsapp' => $user->notify_whatsapp,
+                'whatsappNumber' => $user->whatsapp_number,
+                'dailySummary' => $user->notify_daily_summary,
+                'monthlyCapPkr' => $user->monthly_cap !== null ? (int) round((float) $user->monthly_cap * config('hamsukhan.pkr_per_usd')) : null,
+                'spentThisMonthPkr' => (int) round(app(\App\Services\WalletService::class)->spentThisMonth($user) * config('hamsukhan.pkr_per_usd')),
+                'whatsappAvailable' => app(\App\Services\WhatsAppService::class)->enabled(),
+                'recent' => $user->hasMany(\App\Models\NotificationLog::class)->latest()->limit(8)->get()
+                    ->map(fn ($n) => ['kind' => $n->kind, 'channel' => $n->channel, 'status' => $n->status, 'error' => $n->error, 'at' => $n->created_at->toIso8601String()]),
+            ],
             'timezones' => ['Asia/Karachi', 'Asia/Dubai', 'Asia/Riyadh', 'Europe/London', 'America/New_York', 'UTC'],
         ]);
     }
@@ -39,6 +52,62 @@ class SettingsController extends Controller
         $user->save();
 
         return back()->with('success', $emailChanged ? 'Profile saved, please verify your new email' : 'Profile saved');
+    }
+
+    /** Lead / balance / summary alerts and the monthly spending limit (entered in PKR, stored in the wallet's USD). */
+    public function updateNotifications(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'email' => ['boolean'],
+            'whatsapp' => ['boolean'],
+            'whatsappNumber' => ['nullable', 'string', 'max:30', 'required_if:whatsapp,true'],
+            'dailySummary' => ['boolean'],
+            'monthlyCapPkr' => ['nullable', 'integer', 'min:500', 'max:10000000'],
+        ], ['whatsappNumber.required_if' => 'Enter the WhatsApp number that should get the alerts.']);
+
+        $number = null;
+        if (filled($data['whatsappNumber'] ?? null)) {
+            $number = \App\Support\Phone::normalize($data['whatsappNumber']);
+            if (! $number) {
+                return back()->withErrors(['whatsappNumber' => 'Enter a valid number, e.g. 0300 1234567.']);
+            }
+        }
+
+        $request->user()->update([
+            'notify_email' => $request->boolean('email'),
+            'notify_whatsapp' => $request->boolean('whatsapp'),
+            'whatsapp_number' => $number,
+            'notify_daily_summary' => $request->boolean('dailySummary'),
+            'monthly_cap' => isset($data['monthlyCapPkr']) ? round($data['monthlyCapPkr'] / config('hamsukhan.pkr_per_usd'), 2) : null,
+        ]);
+
+        return back()->with('success', 'Notification settings saved');
+    }
+
+    /** Sends a test alert on every channel the owner switched on. */
+    public function testNotification(Request $request, \App\Services\WhatsAppService $whatsapp): RedirectResponse
+    {
+        $user = $request->user();
+        $sent = [];
+        try {
+            if ($user->notify_email) {
+                \Illuminate\Support\Facades\Mail::raw("This is a test alert from {$user->bot?->business_name}. New leads from your website will look like this.", fn ($m) => $m->to($user->email)->subject('Hamsukhan test alert'));
+                $sent[] = 'email';
+            }
+            if ($user->notify_whatsapp && $user->whatsapp_number) {
+                abort_unless($whatsapp->enabled(), 409, 'WhatsApp alerts are not switched on for the platform yet.');
+                $whatsapp->send($user->whatsapp_number, 'Hamsukhan test alert: new leads from your website will arrive here.');
+                $sent[] = 'WhatsApp';
+            }
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Test alert failed: '.mb_strimwidth($e->getMessage(), 0, 200, '…'));
+        }
+
+        return back()->with($sent ? 'success' : 'error', $sent ? 'Test alert sent by '.implode(' and ', $sent) : 'Switch on email or WhatsApp alerts first.');
     }
 
     public function updateAvatar(Request $request): RedirectResponse

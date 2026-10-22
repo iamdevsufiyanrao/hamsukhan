@@ -11,7 +11,7 @@ class Call extends Model
 {
     protected $fillable = [
         'vapi_call_id', 'title', 'outcome_tag', 'status', 'ended_reason', 'is_test', 'started_at', 'ended_at',
-        'duration_seconds', 'cost', 'recording_url', 'summary',
+        'duration_seconds', 'cost', 'recording_url', 'summary', 'unanswered', 'after_hours',
     ];
 
     protected function casts(): array
@@ -21,6 +21,8 @@ class Call extends Model
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
             'cost' => 'decimal:4',
+            'unanswered' => 'array',
+            'after_hours' => 'boolean',
         ];
     }
 

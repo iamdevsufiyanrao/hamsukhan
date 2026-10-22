@@ -40,6 +40,28 @@ return [
         'model' => env('ELEVENLABS_MODEL', 'eleven_multilingual_v2'),
     ],
 
+    /*
+    | WhatsApp Cloud API (developers.facebook.com → WhatsApp). Without a token, WhatsApp alerts are skipped.
+    | Business-initiated messages need an approved template; `template` is its name, with one body
+    | variable {{1}} that receives the alert text. Without a template, plain text is sent (only delivered
+    | if the owner messaged the business number in the last 24 hours).
+    */
+    'whatsapp' => [
+        'token' => env('WHATSAPP_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'template' => env('WHATSAPP_TEMPLATE'),
+        'template_lang' => env('WHATSAPP_TEMPLATE_LANG', 'en'),
+        'base_url' => env('WHATSAPP_BASE_URL', 'https://graph.facebook.com/v21.0'),
+    ],
+
+    /*
+    | Owner alerts. Low-balance alerts fire once each time the balance drops below each threshold (USD).
+    */
+    'notifications' => [
+        'low_balance_thresholds' => [5, 1],
+        'daily_summary_at' => '21:00', // Asia/Karachi
+    ],
+
     'openai' => [
         // Optional: your own OpenAI key for the LLM inside Vapi (otherwise Vapi's built-in key is used).
         'api_key' => env('OPENAI_API_KEY'),
@@ -53,6 +75,10 @@ return [
         'support_email' => env('HAMSUKHAN_SUPPORT_EMAIL'),
         'support_phone' => env('HAMSUKHAN_SUPPORT_PHONE'),
         'whatsapp' => env('HAMSUKHAN_WHATSAPP'),
+        // Block the dashboard until the email is verified (turn on once outgoing mail works).
+        'require_email_verification' => (bool) env('HAMSUKHAN_REQUIRE_EMAIL_VERIFICATION', false),
+        // Where error alerts go (falls back to support_email).
+        'alert_email' => env('HAMSUKHAN_ALERT_EMAIL'),
         'allow_signups' => true,
         'announcement' => null,
         'terms_url' => null,

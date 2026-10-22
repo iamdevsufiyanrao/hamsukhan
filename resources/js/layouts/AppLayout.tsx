@@ -11,6 +11,7 @@ const TITLES: Record<string, [string, string]> = {
     BotStudio: ['Workspace', 'Bot Studio'],
     CallLogs: ['Workspace', 'Call Logs'],
     Bookings: ['Workspace', 'Bookings'],
+    Insights: ['Workspace', 'Insights'],
     Billing: ['Account', 'Billing'],
     Settings: ['Account', 'Settings'],
     Integrations: ['Workspace', 'Integrations'],
@@ -74,6 +75,7 @@ function Shell({ children }: { children: ReactNode }) {
         { href: '/bot-studio', label: 'Bot Studio', icon: 'sliders', component: 'BotStudio' },
         { href: '/calls', label: 'Call Logs', icon: 'phone', component: 'CallLogs' },
         { href: '/bookings', label: 'Bookings', icon: 'calendar', component: 'Bookings', badge: badges.newBookings },
+        { href: '/insights', label: 'Insights', icon: 'trend', component: 'Insights' },
         { href: '/integrations', label: 'Integrations', icon: 'plug', component: 'Integrations' },
         { href: '/billing', label: 'Billing', icon: 'wallet', component: 'Billing' },
     ];
@@ -181,6 +183,15 @@ function Shell({ children }: { children: ReactNode }) {
                         <div className="alert imp">
                             <Icon name="alert" />
                             <span className="grow">{page.props.site.announcement}</span>
+                        </div>
+                    )}
+                    {isCustomer && !user.verified && !auth.impersonator && (
+                        <div className="alert warn">
+                            <Icon name="mail" />
+                            <span className="grow">Please verify your email ({user.email}) so lead alerts reach you.</span>
+                            <Link href="/email/verification-notification" method="post" as="button" className="btn btn-sm btn-ghost">
+                                Send link again
+                            </Link>
                         </div>
                     )}
                     {isCustomer && wallet.low && component !== 'Billing' && (

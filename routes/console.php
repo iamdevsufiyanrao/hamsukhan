@@ -11,6 +11,13 @@ Schedule::command('hamsukhan:deliver-integrations')->everyMinute()->withoutOverl
 // Heartbeat so Super admin → Settings → Cron & system can show whether cron is actually running.
 Schedule::call(fn () => Cache::forever('hamsukhan:cron_last_run', now()->getTimestamp()))->everyMinute()->name('cron-heartbeat');
 
+// End-of-day summary to every owner who wants one (only sent on days with calls or leads, once per day).
+Schedule::call(function () {
+    $notify = app(\App\Services\NotificationService::class);
+    \App\Models\User::where('is_admin', false)->whereNull('suspended_at')->where('notify_daily_summary', true)->whereHas('bot')
+        ->each(fn ($user) => rescue(fn () => $notify->dailySummary($user, now())));
+})->dailyAt(config('hamsukhan.notifications.daily_summary_at', '21:00'))->timezone('Asia/Karachi')->name('daily-summary');
+
 // Public landing-page demo calls are kept at most 7 days (promised on /privacy). They live on the demo bot as test calls.
 Schedule::call(function () {
     $bot = ($key = config('hamsukhan.demo.bot_key')) ? \App\Models\Bot::where('public_key', $key)->first() : null;

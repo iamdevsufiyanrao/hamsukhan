@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Bot;
 use App\Services\Integrations\IntegrationDispatcher;
+use App\Services\NotificationService;
 use App\Services\VapiService;
 use App\Services\WalletService;
 use App\Support\Phone;
@@ -21,6 +22,9 @@ class WidgetController extends Controller
     public function config(Request $request, string $publicKey): JsonResponse
     {
         $bot = Bot::where('public_key', $publicKey)->firstOrFail();
+        if (! $bot->allowsOrigin($request->headers->get('origin'))) {
+            return $this->cors(response()->json(['active' => false, 'reason' => 'domain_not_allowed'], 403));
+        }
         $this->markInstalled($request, $bot);
 
         return $this->cors(response()->json([
@@ -36,13 +40,18 @@ class WidgetController extends Controller
     {
         $bot = Bot::with('user')->where('public_key', $publicKey)->firstOrFail();
 
+        if (! $bot->allowsOrigin($request->headers->get('origin'))) {
+            return $this->cors(response()->json(['ok' => false, 'reason' => 'domain_not_allowed', 'message' => 'This assistant is not set up for this website.'], 403));
+        }
         if (! $bot->is_active || $bot->user->isSuspended()) {
             return $this->cors(response()->json(['ok' => false, 'reason' => 'inactive', 'message' => 'This assistant is switched off.'], 409));
         }
 
         $maxSeconds = $wallet->maxAffordableSeconds($bot->user, $bot->max_call_minutes);
         if ($maxSeconds < 30) {
-            return $this->cors(response()->json(['ok' => false, 'reason' => 'no_balance', 'message' => 'Not enough balance for a call.'], 402));
+            $capped = $bot->user->monthly_cap !== null && $wallet->spentThisMonth($bot->user) >= (float) $bot->user->monthly_cap;
+
+            return $this->cors(response()->json(['ok' => false, 'reason' => $capped ? 'cap_reached' : 'no_balance', 'message' => $capped ? 'The monthly spending limit is reached.' : 'Not enough balance for a call.'], 402));
         }
 
         if ($error = $this->ensureLive($bot, $vapi)) {
@@ -62,9 +71,12 @@ class WidgetController extends Controller
     }
 
     /** "Request a callback" from the widget: the human fallback when a visitor can't or won't talk to the AI. */
-    public function callback(Request $request, string $publicKey, IntegrationDispatcher $integrations): JsonResponse
+    public function callback(Request $request, string $publicKey, IntegrationDispatcher $integrations, NotificationService $notifications): JsonResponse
     {
         $bot = Bot::where('public_key', $publicKey)->firstOrFail();
+        if (! $bot->allowsOrigin($request->headers->get('origin'))) {
+            return $this->cors(response()->json(['ok' => false, 'message' => 'This form is not set up for this website.'], 403));
+        }
         // Validated by hand so the error answer carries CORS headers (the widget runs on other domains).
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:80'],
@@ -91,6 +103,7 @@ class WidgetController extends Controller
             'preferred_time' => $data['preferredTime'] ?? null,
         ]);
         rescue(fn () => $integrations->dispatchForBooking($booking->setRelation('bot', $bot)));
+        $notifications->lead($booking);
 
         return $this->cors(response()->json(['ok' => true]));
     }
