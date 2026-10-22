@@ -101,6 +101,11 @@ class Bot extends Model
         if ($this->voice) {
             return $this->voice->name.' · cloned';
         }
+        if (str_starts_with((string) $this->preset_voice, 'el:')) {
+            $lib = collect(rescue(fn () => app(\App\Services\ElevenLabsService::class)->libraryVoices(), [], report: false))->firstWhere('id', substr($this->preset_voice, 3));
+
+            return ($lib['name'] ?? 'ElevenLabs voice').' · library';
+        }
         $preset = collect(config('hamsukhan.preset_voices'))->firstWhere('id', $this->preset_voice);
 
         return $preset['name'] ?? 'Not set';

@@ -12,6 +12,7 @@ type WState = 'idle' | 'loading' | 'active' | 'error';
 type WStyle = { title: string; sub: string; color: string; iconUrl: string };
 type Position = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 type Widget = { position: Position; offset: number; width: number; height: number; states: Record<WState, WStyle> };
+type LibraryVoice = { id: string; name: string; previewUrl: string | null; gender: string | null; accent: string | null; age: string | null; style: string | null };
 type CaptureField = { key?: string; label: string; type: string; required: boolean; hint?: string | null };
 
 type Props = {
@@ -45,6 +46,8 @@ type Props = {
     options: {
         languages: string[];
         presetVoices: { id: string; name: string }[];
+        library: LibraryVoice[];
+        canClone: boolean | null;
         maxVoices: number;
         minCloneSeconds: number;
         fieldTypes: string[];
@@ -374,6 +377,16 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                 </div>
             </div>
             <div className="card-b stack">
+                {options.library.length > 0 ? (
+                    <VoiceLibrary
+                        voices={options.library}
+                        selected={voiceId ? '' : preset}
+                        onPick={(id) => {
+                            setPreset(id);
+                            setVoiceId(null);
+                        }}
+                    />
+                ) : (
                 <div className="field">
                     <label htmlFor="preset">Library voices</label>
                     <select
@@ -393,6 +406,7 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                         ))}
                     </select>
                 </div>
+                )}
                 <div>
                     <div className="section-t">
                         Your cloned voices · {voices.length} / {options.maxVoices}
@@ -459,10 +473,17 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                             </div>
                         ))}
                     </div>
-                    <button className="clone-cta" onClick={() => (voices.length >= options.maxVoices ? toast(`You can keep up to ${options.maxVoices} voices, delete one first`, 'error') : setCloneOpen(true))}>
-                        <Icon name="mic" />
-                        Clone a new voice
-                    </button>
+                    {options.canClone === false ? (
+                        <div className="notice" style={{ marginTop: 10 }}>
+                            <Icon name="alert" className="i i-sm" />
+                            Voice cloning is not available right now. Pick a voice from the library above, it works the same on calls.
+                        </div>
+                    ) : (
+                        <button className="clone-cta" onClick={() => (voices.length >= options.maxVoices ? toast(`You can keep up to ${options.maxVoices} voices, delete one first`, 'error') : setCloneOpen(true))}>
+                            <Icon name="mic" />
+                            Clone a new voice
+                        </button>
+                    )}
                 </div>
                 <div className="form-foot">
                     <span>Voices are cloned with ElevenLabs.</span>
@@ -472,6 +493,72 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                 </div>
             </div>
             <CloneModal open={cloneOpen} onClose={() => setCloneOpen(false)} minSeconds={options.minCloneSeconds} />
+        </div>
+    );
+}
+
+/** ElevenLabs premade voices: filter, listen (one at a time) and pick. */
+function VoiceLibrary({ voices, selected, onPick }: { voices: LibraryVoice[]; selected: string; onPick: (presetId: string) => void }) {
+    const { toast } = useUI();
+    const [gender, setGender] = useState<'all' | 'female' | 'male'>('all');
+    const [playing, setPlaying] = useState<string | null>(null);
+    const shown = voices.filter((v) => gender === 'all' || (v.gender ?? '').toLowerCase() === gender);
+
+    const listen = (v: LibraryVoice) => {
+        if (!v.previewUrl) return toast('No preview for this voice');
+        toggleUrl(v.previewUrl).then(
+            (on) => setPlaying(on ? v.id : null),
+            () => toast('Could not play the preview', 'error'),
+        );
+    };
+
+    return (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div className="section-t" style={{ margin: 0 }}>
+                    Voice library · {voices.length} voices
+                </div>
+                <Seg
+                    value={gender}
+                    options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'female', label: 'Female' },
+                        { value: 'male', label: 'Male' },
+                    ]}
+                    onChange={setGender}
+                />
+            </div>
+            <p className="hint" style={{ marginBottom: 8 }}>
+                Press play to listen (previews are in English). On calls the voice speaks the language your bot is set to; try a test call to hear it in Urdu.
+            </p>
+            <div className="voice-list" style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {shown.map((v) => {
+                    const id = `el:${v.id}`;
+                    return (
+                        <div key={v.id} className={'voice' + (selected === id ? ' on' : '')} onClick={() => onPick(id)}>
+                            <span className="v-av">
+                                <Icon name="wave" />
+                            </span>
+                            <span className="v-tx">
+                                <b>{v.name}</b>
+                                <span>{[v.gender, v.age, v.accent, v.style].filter(Boolean).join(' · ')}</span>
+                            </span>
+                            <span className="v-act">
+                                <button
+                                    title={playing === v.id ? 'Stop' : 'Listen'}
+                                    aria-label={`${playing === v.id ? 'Stop' : 'Listen to'} ${v.name}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        listen(v);
+                                    }}
+                                >
+                                    <Icon name={playing === v.id ? 'pause' : 'play'} className="i i-sm" />
+                                </button>
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

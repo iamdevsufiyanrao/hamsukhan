@@ -28,6 +28,9 @@ class VoiceController extends Controller
             'sample.uploaded' => 'The recording did not upload (the server limit may be too low). Try a shorter clip.',
         ]);
 
+        if ($elevenLabs->canClone() === false) {
+            return back()->with('error', 'Voice cloning is not available on the current ElevenLabs plan. Pick a voice from the library instead.');
+        }
         if ($user->voices()->count() >= config('hamsukhan.max_cloned_voices')) {
             return back()->withErrors(['name' => 'You can keep up to '.config('hamsukhan.max_cloned_voices').' cloned voices. Delete one first.']);
         }

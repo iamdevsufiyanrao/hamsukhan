@@ -70,6 +70,9 @@ class BotStudioController extends Controller
             'options' => [
                 'languages' => array_keys(config('hamsukhan.languages')),
                 'presetVoices' => config('hamsukhan.preset_voices'),
+                // ElevenLabs premade voices with a preview to listen to; empty when ElevenLabs is not connected.
+                'library' => rescue(fn () => app(\App\Services\ElevenLabsService::class)->libraryVoices(), [], report: false),
+                'canClone' => app(\App\Services\ElevenLabsService::class)->canClone(),
                 'maxVoices' => config('hamsukhan.max_cloned_voices'),
                 'minCloneSeconds' => config('hamsukhan.min_clone_seconds'),
                 'fieldTypes' => CaptureFields::TYPES,
@@ -105,7 +108,12 @@ class BotStudioController extends Controller
         $user = $request->user();
         $data = $request->validate([
             'voiceId' => ['nullable', 'integer', Rule::exists('voices', 'id')->where('user_id', $user->id)->where('status', 'ready')],
-            'presetVoice' => ['nullable', Rule::in(collect(config('hamsukhan.preset_voices'))->pluck('id'))],
+            // A preset id, or "el:<voice id>" for a voice from the ElevenLabs library (premade voices only).
+            'presetVoice' => ['nullable', 'string', 'max:80', function ($attr, $value, $fail) {
+                $ok = collect(config('hamsukhan.preset_voices'))->pluck('id')->contains($value)
+                    || (str_starts_with($value, 'el:') && collect(app(\App\Services\ElevenLabsService::class)->libraryVoices())->contains('id', substr($value, 3)));
+                $ok || $fail('That voice is not available.');
+            }],
         ]);
         if (empty($data['voiceId']) && empty($data['presetVoice'])) {
             return back()->withErrors(['voiceId' => 'Pick a voice for your bot.']);

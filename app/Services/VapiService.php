@@ -114,6 +114,9 @@ class VapiService
         if ($bot->voice && ! ElevenLabsService::isSimulatedId($bot->voice->provider_voice_id)) {
             return $bot->voice->provider_voice_id;
         }
+        if (str_starts_with((string) $bot->preset_voice, 'el:')) {
+            return substr($bot->preset_voice, 3); // picked from the ElevenLabs library
+        }
         $presets = collect(config('hamsukhan.preset_voices'));
         $preset = $presets->firstWhere('id', $bot->preset_voice) ?? $presets->first();
 

@@ -170,6 +170,32 @@ class ProviderLiveTest extends TestCase
         $this->assertSame('elevenlabs_import', $bot->voice->provider);
     }
 
+    public function test_customers_pick_premade_library_voices_only(): void
+    {
+        $user = $this->customer();
+        $this->liveKeys();
+        Http::fake([
+            'api.elevenlabs.io/v1/voices' => Http::response(['voices' => [
+                ['voice_id' => 'premade1', 'name' => 'Sarah', 'category' => 'premade', 'preview_url' => 'https://x/s.mp3', 'labels' => ['gender' => 'female']],
+                ['voice_id' => 'someonesClone', 'name' => 'Other customer', 'category' => 'cloned'],
+            ]]),
+            'api.elevenlabs.io/v1/user' => Http::response(['subscription' => ['tier' => 'free', 'can_use_instant_voice_cloning' => false]]),
+            'api.vapi.ai/*' => Http::response(['id' => 'asst_1']),
+        ]);
+
+        $this->actingAs($user)->get('/bot-studio?tab=voice')->assertInertia(fn ($p) => $p
+            ->where('options.library.0.id', 'premade1')->count('options.library', 1)->where('options.canClone', false));
+
+        $this->actingAs($user)->patch('/bot-studio/voice', ['presetVoice' => 'el:someonesClone'])->assertSessionHasErrors('presetVoice');
+        $this->actingAs($user)->patch('/bot-studio/voice', ['presetVoice' => 'el:premade1'])->assertSessionHasNoErrors();
+        $this->assertSame('premade1', app(VapiService::class)->voiceIdFor($user->bot->fresh()));
+        $this->assertSame('Sarah · library', $user->bot->fresh()->voiceLabel());
+
+        // Free plan: cloning is refused up front with a clear message
+        $this->actingAs($user)->post('/voices', ['name' => 'Me', 'sample' => UploadedFile::fake()->create('s.wav', 300, 'audio/wav'), 'seconds' => 40, 'consent' => true])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'not available on the current ElevenLabs plan'));
+    }
+
     public function test_legal_pages_render(): void
     {
         $this->get('/terms')->assertOk();

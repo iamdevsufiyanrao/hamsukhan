@@ -102,6 +102,49 @@ class ElevenLabsService
         ])->filter(fn ($v) => $v['id'] !== '')->sortBy(fn ($v) => [$v['category'] === 'premade' ? 1 : 0, $v['name']])->values()->all();
     }
 
+    /**
+     * Voices every customer may pick: ElevenLabs' premade voices only (never other customers' clones).
+     * Each has a public preview MP3 for the "listen" button. Cached for 6 hours; [] when not connected or unreachable.
+     *
+     * @return list<array{id: string, name: string, previewUrl: ?string, gender: ?string, accent: ?string, age: ?string, style: ?string}>
+     */
+    public function libraryVoices(): array
+    {
+        if (! $this->enabled()) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('elevenlabs:library:'.md5((string) config('hamsukhan.elevenlabs.api_key')), now()->addHours(6), function () {
+            return collect($this->listVoices())->where('category', 'premade')->map(fn ($v) => [
+                'id' => $v['id'],
+                'name' => $v['name'],
+                'previewUrl' => $v['previewUrl'],
+                'gender' => $v['labels']['gender'] ?? null,
+                'accent' => $v['labels']['accent'] ?? null,
+                'age' => $v['labels']['age'] ?? null,
+                'style' => $v['labels']['use_case'] ?? $v['labels']['descriptive'] ?? $v['labels']['description'] ?? null,
+            ])->sortBy('name')->values()->all();
+        });
+    }
+
+    /** Whether the ElevenLabs plan allows instant voice cloning (null = unknown / not connected). Cached for an hour. */
+    public function canClone(): ?bool
+    {
+        if (! $this->enabled()) {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('elevenlabs:can-clone:'.md5((string) config('hamsukhan.elevenlabs.api_key')), now()->addHour(), function () {
+            try {
+                $v = $this->http()->timeout(10)->get('/v1/user')->throw()->json('subscription.can_use_instant_voice_cloning');
+            } catch (\Throwable) {
+                return null;
+            }
+
+            return is_bool($v) ? $v : null;
+        });
+    }
+
     public function deleteVoice(?string $providerVoiceId): void
     {
         if (self::isSimulatedId($providerVoiceId) || ! $this->enabled()) {
