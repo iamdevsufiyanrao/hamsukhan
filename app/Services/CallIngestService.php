@@ -64,8 +64,11 @@ class CallIngestService
                 $call->messages()->create(['role' => $role, 'text' => $text, 'position' => $i]);
             }
 
+            // Booked live during the call (tool call): link those bookings to the call instead of creating another one.
+            $liveBooked = $bot->bookings()->where('vapi_call_id', $vapiCallId)->whereNull('call_id')->update(['call_id' => $call->id]);
+
             $booking = (array) Arr::get($structured, 'booking', []);
-            if (filled($booking['customerName'] ?? null) && filled($booking['request'] ?? null)) {
+            if (! $liveBooked && filled($booking['customerName'] ?? null) && filled($booking['request'] ?? null)) {
                 $bot->bookings()->create([
                     'call_id' => $call->id,
                     'type' => $this->bookingType($booking['type'] ?? null, $structured['outcome'] ?? null),
@@ -84,7 +87,8 @@ class CallIngestService
         $this->wallet->checkAlerts($bot->user()->first());
 
         // Push the booking/order into the customer's own software (their connectors) and alert the owner.
-        if ($created = $call->booking()->first()) {
+        // Live bookings were already sent to connectors and alerted when they were made.
+        if (($created = $call->booking()->first()) && ! $created->vapi_call_id) {
             $this->integrations->dispatchForBooking($created->setRelation('bot', $bot));
             if (! $call->is_test) {
                 $this->notifications->lead($created);

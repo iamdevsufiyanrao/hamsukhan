@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ElevenLabsService;
+use App\Support\Totp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,16 @@ class SettingsController extends Controller
 
         return Inertia::render('Settings', [
             'profile' => ['name' => $user->name, 'email' => $user->email, 'timezone' => $user->timezone],
+            'twoFactor' => [
+                'enabled' => $user->hasTwoFactor(),
+                // Shown only while setting up (secret saved, not confirmed yet).
+                'setup' => $user->two_factor_secret && ! $user->two_factor_confirmed_at
+                    ? ['secret' => $user->two_factor_secret, 'uri' => Totp::uri($user->two_factor_secret, $user->email, config('hamsukhan.site.name'))]
+                    : null,
+                'codesLeft' => count($user->two_factor_recovery_codes ?? []),
+                'recoveryCodes' => session('recoveryCodes'),
+            ],
+            'sessions' => TwoFactorController::sessions($request),
             'notifications' => [
                 'email' => $user->notify_email,
                 'whatsapp' => $user->notify_whatsapp,

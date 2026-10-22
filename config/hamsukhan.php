@@ -55,6 +55,16 @@ return [
     ],
 
     /*
+    | Google Calendar (console.cloud.google.com → APIs & Services → Credentials → OAuth client ID, type
+    | "Web application"). Authorised redirect URI: https://YOUR-DOMAIN/integrations/google/callback.
+    | Enable the "Google Calendar API" for the project.
+    */
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+    ],
+
+    /*
     | Owner alerts. Low-balance alerts fire once each time the balance drops below each threshold (USD).
     */
     'notifications' => [

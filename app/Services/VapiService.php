@@ -138,6 +138,7 @@ class VapiService
                 'model' => config('hamsukhan.vapi.model'),
                 'temperature' => 0.3,
                 'messages' => [['role' => 'system', 'content' => $bot->systemPrompt()]],
+                'tools' => $this->liveBookingTools($bot) ?: null,
             ]),
             'voice' => [
                 'provider' => '11labs',
@@ -162,6 +163,49 @@ class VapiService
 
         // Vapi rejects explicit nulls for optional fields.
         return array_filter($payload, fn ($v) => $v !== null && $v !== '');
+    }
+
+    /** Function tools for live booking; Vapi calls our webhook with "tool-calls" (see VapiWebhookController). Only with opening hours set. */
+    private function liveBookingTools(Bot $bot): array
+    {
+        if (! $bot->live_booking || ! $bot->business_hours) {
+            return [];
+        }
+        $server = array_filter(['url' => route('webhooks.vapi'), 'secret' => config('hamsukhan.vapi.webhook_secret')]);
+        $date = ['type' => 'string', 'description' => 'The day in YYYY-MM-DD format (work it out from today\'s date), or "today" / "tomorrow".'];
+
+        return [
+            [
+                'type' => 'function',
+                'messages' => [['type' => 'request-start', 'content' => 'Ek second, main check karti hoon.']],
+                'function' => [
+                    'name' => 'check_availability',
+                    'description' => 'Get the free appointment times for a day. Always call this before offering or confirming a time.',
+                    'parameters' => ['type' => 'object', 'properties' => ['date' => $date], 'required' => ['date']],
+                ],
+                'server' => $server,
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'book_appointment',
+                    'description' => 'Book a free time for the caller. Only after check_availability, and after the caller agreed to the time and gave their name and phone number.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'date' => $date,
+                            'time' => ['type' => 'string', 'description' => 'Start time in 24-hour HH:MM, exactly one of the free times'],
+                            'customerName' => ['type' => 'string'],
+                            'phone' => ['type' => 'string', 'description' => 'Phone or WhatsApp number, e.g. 03001234567'],
+                            'service' => ['type' => 'string', 'description' => 'What the appointment is for'],
+                            'details' => ['type' => 'object', 'properties' => (object) CaptureFields::schema($bot->capture_fields ?? [])],
+                        ],
+                        'required' => ['date', 'time', 'customerName', 'phone'],
+                    ],
+                ],
+                'server' => $server,
+            ],
+        ];
     }
 
     private function structuredDataSchema(Bot $bot): array

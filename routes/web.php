@@ -18,10 +18,12 @@ use App\Http\Controllers\LegalController;
 use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TestCallController;
+use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\VoiceController;
 use App\Http\Controllers\VoiceSampleController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Controllers\EmailVerificationController;
+use App\Http\Controllers\GoogleCalendarController;
 use App\Http\Controllers\InsightsController;
 use App\Http\Middleware\EnsureBot;
 use App\Http\Middleware\EnsureEmailVerified;
@@ -45,6 +47,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'showReset'])->name('password.reset');
     Route::post('/reset-password', [AuthController::class, 'reset'])->name('password.update');
+    Route::get('/two-factor-challenge', [TwoFactorController::class, 'challenge'])->name('two-factor.challenge');
+    Route::post('/two-factor-challenge', [TwoFactorController::class, 'verify'])->middleware('throttle:two-factor');
 });
 
 // ---------- Any signed-in user ----------
@@ -57,7 +61,12 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
 
     Route::get('/settings', [SettingsController::class, 'show'])->name('settings');
     Route::patch('/settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
-    Route::patch('/settings/notifications', [SettingsController::class, 'updateNotifications'])->name('settings.notifications');
+    Route::post('/settings/two-factor', [TwoFactorController::class, 'enable'])->middleware('throttle:5,1')->name('two-factor.enable');
+    Route::post('/settings/two-factor/confirm', [TwoFactorController::class, 'confirm'])->middleware('throttle:two-factor')->name('two-factor.confirm');
+    Route::post('/settings/two-factor/recovery-codes', [TwoFactorController::class, 'regenerate'])->middleware('throttle:5,1')->name('two-factor.codes');
+    Route::delete('/settings/two-factor', [TwoFactorController::class, 'disable'])->middleware('throttle:5,1')->name('two-factor.disable');
+    Route::post('/settings/sessions/logout-others', [TwoFactorController::class, 'logoutOthers'])->middleware('throttle:5,1')->name('sessions.logout-others');
+    Route::patch('/settings/notifications',[SettingsController::class, 'updateNotifications'])->name('settings.notifications');
     Route::post('/settings/notifications/test', [SettingsController::class, 'testNotification'])->middleware('throttle:3,1')->name('settings.notifications.test');
     Route::post('/settings/avatar', [SettingsController::class, 'updateAvatar'])->name('settings.avatar');
     Route::delete('/settings/avatar', [SettingsController::class, 'destroyAvatar'])->name('settings.avatar.destroy');
@@ -135,6 +144,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::patch('/bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
 
     Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations');
+    Route::post('/integrations/google/connect', [GoogleCalendarController::class, 'connect'])->name('google.connect');
+    Route::get('/integrations/google/callback', [GoogleCalendarController::class, 'callback'])->middleware('throttle:10,1')->name('google.callback');
+    Route::delete('/integrations/google', [GoogleCalendarController::class, 'disconnect'])->name('google.disconnect');
     Route::get('/integrations/connector.zip', [IntegrationController::class, 'package'])->name('integrations.package');
     Route::post('/integrations', [IntegrationController::class, 'store'])->name('integrations.store');
     Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');

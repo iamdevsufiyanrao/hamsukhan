@@ -56,6 +56,13 @@ class IntegrationController extends Controller
             'sources' => PayloadBuilder::sources($bot->capture_fields ?? []),
             'events' => Integration::EVENTS,
             'max' => config('hamsukhan.integrations.max_per_bot'),
+            'calendar' => [
+                'available' => app(\App\Services\GoogleCalendarService::class)->enabled(),
+                'email' => $request->user()->googleCalendar?->google_email,
+                'connected' => (bool) $request->user()->googleCalendar,
+                'error' => $request->user()->googleCalendar?->last_error,
+                'liveBooking' => $bot->live_booking,
+            ],
         ]);
     }
 

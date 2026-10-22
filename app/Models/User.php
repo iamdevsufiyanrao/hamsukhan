@@ -14,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 
 #[Fillable(['name', 'email', 'password', 'avatar_path', 'timezone', 'terms_accepted_at', 'notify_email', 'notify_whatsapp', 'whatsapp_number', 'notify_daily_summary', 'monthly_cap'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
@@ -40,12 +40,25 @@ class User extends Authenticatable implements MustVerifyEmail
             'notify_whatsapp' => 'boolean',
             'notify_daily_summary' => 'boolean',
             'monthly_cap' => 'decimal:2',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
     public function bot(): HasOne
     {
         return $this->hasOne(Bot::class);
+    }
+
+    public function googleCalendar(): HasOne
+    {
+        return $this->hasOne(GoogleCalendar::class);
+    }
+
+    public function hasTwoFactor(): bool
+    {
+        return $this->two_factor_confirmed_at !== null && $this->two_factor_secret !== null;
     }
 
     public function voices(): HasMany

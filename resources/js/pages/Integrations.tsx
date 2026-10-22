@@ -32,12 +32,57 @@ type Delivery = {
     nextAttemptAt: string | null;
     createdAt: string;
 };
-type Props = { integrations: Integration[]; deliveries: Delivery[]; sources: Record<string, string>; events: string[]; max: number };
+type Calendar = { available: boolean; email: string | null; connected: boolean; error: string | null; liveBooking: boolean };
+type Props = { integrations: Integration[]; deliveries: Delivery[]; sources: Record<string, string>; events: string[]; max: number; calendar: Calendar };
 
 const EVENT_LABEL: Record<string, string> = { 'booking.created': 'New booking', 'order.created': 'New order', 'callback.created': 'Callback request' };
 const STATUS_CHIP: Record<string, string> = { delivered: 'ok', failed: 'bad', pending: 'warn', retrying: 'warn' };
 
-export default function Integrations({ integrations, deliveries, sources, events, max }: Props) {
+/** Owner's Google Calendar: bookings the bot makes go in, busy times are never offered. */
+function CalendarCard({ calendar }: { calendar: Calendar }) {
+    return (
+        <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-h">
+                <div>
+                    <h3>Google Calendar</h3>
+                    <p>Appointments your bot books appear in your calendar, and times you are busy there are never offered to callers.</p>
+                </div>
+                {calendar.connected ? (
+                    <button className="btn btn-ghost btn-sm" onClick={() => confirm('Disconnect Google Calendar? New bookings will no longer be added to it.') && router.delete('/integrations/google', { preserveScroll: true })}>
+                        Disconnect
+                    </button>
+                ) : (
+                    <button className="btn btn-primary btn-sm" disabled={!calendar.available} onClick={() => router.post('/integrations/google/connect')}>
+                        <Icon name="calendar" className="i i-sm" />
+                        Connect Google Calendar
+                    </button>
+                )}
+            </div>
+            <div className="card-b stack">
+                {!calendar.available && <div className="notice">Google Calendar is not switched on for the platform yet. Ask support.</div>}
+                {calendar.connected && (
+                    <div className="notice" style={{ background: 'var(--info-soft)', color: 'var(--info)' }}>
+                        <Icon name="check" className="i i-sm" />
+                        Connected to {calendar.email ?? 'your Google account'} (primary calendar).
+                    </div>
+                )}
+                {calendar.error && (
+                    <div className="notice" style={{ color: 'var(--danger)' }}>
+                        <Icon name="alert" className="i i-sm" />
+                        {calendar.error}
+                    </div>
+                )}
+                {!calendar.liveBooking && (
+                    <span className="hint">
+                        Live booking is off, so the bot only takes booking requests. Switch it on in <a className="link" href="/bot-studio">Bot Studio → Opening hours</a>.
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function Integrations({ integrations, deliveries, sources, events, max, calendar }: Props) {
     const [editing, setEditing] = useState<Integration | 'new' | null>(null);
     const [showSecret, setShowSecret] = useState<number | null>(null);
     const [openDelivery, setOpenDelivery] = useState<Delivery | null>(null);
@@ -52,6 +97,7 @@ export default function Integrations({ integrations, deliveries, sources, events
     return (
         <>
             <Head title="Integrations" />
+            <CalendarCard calendar={calendar} />
             <div className="hello">
                 <div>
                     <h2>Send bookings & orders to your software</h2>

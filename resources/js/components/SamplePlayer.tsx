@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/Icon';
+import { claimAudio, releaseAudio } from '@/lib/audioFocus';
 
 export type Sample = { id: number; name: string; label: string | null; language: string; src: string; key: string };
 
@@ -57,6 +58,10 @@ export function useSamplePlayer() {
     const started = useRef(0);
     const offset = useRef<Record<number, number>>({});
     const raf = useRef(0);
+    // Bumped on every click, so a slow download can't start playing after the visitor already chose another sample.
+    const request = useRef(0);
+    // How other players (or another list of samples) stop this one.
+    const owner = useRef({ stop: () => {} });
 
     const stop = (keepOffset: boolean) => {
         cancelAnimationFrame(raf.current);
@@ -70,17 +75,24 @@ export function useSamplePlayer() {
         if (!keepOffset && current !== null) offset.current[current] = 0;
     };
 
-    useEffect(() => () => stop(true), []);
+    useEffect(() => () => {
+        request.current++;
+        stop(true);
+        releaseAudio(owner.current);
+    }, []);
 
     const toggle = async (s: Sample) => {
         setError(null);
         if (current === s.id && node.current) {
             // pause: remember where we were
             offset.current[s.id] = audioCtx().currentTime - started.current;
+            request.current++;
             stop(true);
             setCurrent(null);
+            releaseAudio(owner.current);
             return;
         }
+        const req = ++request.current;
         stop(true);
         setCurrent(null);
         setLoading(s.id);
@@ -89,6 +101,15 @@ export function useSamplePlayer() {
             if (c.state === 'suspended') await c.resume();
             const buf = await load(s);
             setPeaks((p) => (p[s.id] ? p : { ...p, [s.id]: peaksOf(buf) }));
+            if (req !== request.current) return; // another sample was clicked while this one loaded
+            stop(true);
+            owner.current.stop = () => {
+                request.current++;
+                if (node.current) offset.current[s.id] = audioCtx().currentTime - started.current;
+                stop(true);
+                setCurrent(null);
+            };
+            claimAudio(owner.current);
             let from = offset.current[s.id] ?? 0;
             if (from >= buf.duration - 0.05) from = 0;
             const src = c.createBufferSource();
@@ -99,6 +120,7 @@ export function useSamplePlayer() {
             started.current = c.currentTime - from;
             setCurrent(s.id);
             src.onended = () => {
+                releaseAudio(owner.current);
                 cancelAnimationFrame(raf.current);
                 offset.current[s.id] = 0;
                 node.current = null;
@@ -113,7 +135,7 @@ export function useSamplePlayer() {
         } catch (e) {
             setError({ id: s.id, msg: (e as Error).message === 'expired' ? 'Refresh the page to listen again.' : 'Could not play this sample.' });
         } finally {
-            setLoading(null);
+            if (req === request.current) setLoading(null);
         }
     };
 

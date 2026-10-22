@@ -4,6 +4,7 @@ import Icon, { IconName } from '@/components/Icon';
 import { FieldError, Modal, Seg, useUI } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
 import { fileSize, fmtDate, fmtDateLong } from '@/lib/format';
+import { toggleUrl } from '@/lib/audioFocus';
 import { startWavRecording, type WavRecording } from '@/lib/wavRecorder';
 
 type Tab = 'configure' | 'voice' | 'knowledge' | 'widget' | 'embed';
@@ -34,6 +35,9 @@ type Props = {
         hours: Record<string, { open: string; close: string } | null> | null;
         holidays: { date: string; note: string }[];
         allowedDomains: string[];
+        liveBooking: boolean;
+        slotMinutes: number;
+        calendarConnected: boolean;
     };
     providers: { vapi: boolean; elevenlabs: boolean };
     voices: { id: number; name: string; createdAt: string; seconds: number; status: string; hasSample: boolean; pending: boolean }[];
@@ -111,7 +115,7 @@ export default function BotStudio(props: Props) {
                     {tab === 'configure' && (
                         <div className="stack">
                             <ConfigurePane bot={bot} languages={props.options.languages} />
-                            <HoursCard hours={bot.hours} holidays={bot.holidays} />
+                            <HoursCard hours={bot.hours} holidays={bot.holidays} liveBooking={bot.liveBooking} slotMinutes={bot.slotMinutes} calendarConnected={bot.calendarConnected} />
                             <CaptureFieldsCard fields={bot.captureFields} types={props.options.fieldTypes} presets={props.options.fieldPresets} />
                         </div>
                     )}
@@ -436,7 +440,7 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             if (!v.hasSample) return toast('No sample recording stored for this voice');
-                                            new Audio(`/voices/${v.id}/sample`).play().catch(() => toast('Could not play the sample', 'error'));
+                                            toggleUrl(`/voices/${v.id}/sample`).catch(() => toast('Could not play the sample', 'error'));
                                         }}
                                     >
                                         <Icon name="play" className="i i-sm" />
@@ -929,9 +933,9 @@ const DAYS: [string, string][] = [
     ['sun', 'Sunday'],
 ];
 
-function HoursCard({ hours, holidays }: { hours: Record<string, DayHours> | null; holidays: { date: string; note: string }[] }) {
+function HoursCard({ hours, holidays, liveBooking, slotMinutes, calendarConnected }: { hours: Record<string, DayHours> | null; holidays: { date: string; note: string }[]; liveBooking: boolean; slotMinutes: number; calendarConnected: boolean }) {
     const initial = Object.fromEntries(DAYS.map(([d]) => [d, hours?.[d] ? { open: hours[d]!.open, close: hours[d]!.close, closed: false } : { open: '10:00', close: '21:00', closed: !!hours }]));
-    const form = useForm<{ hours: Record<string, { open: string; close: string; closed: boolean }>; holidays: { date: string; note: string }[] }>({ hours: initial, holidays });
+    const form = useForm<{ hours: Record<string, { open: string; close: string; closed: boolean }>; holidays: { date: string; note: string }[]; liveBooking: boolean; slotMinutes: number }>({ hours: initial, holidays, liveBooking, slotMinutes });
     const setDay = (d: string, patch: Partial<{ open: string; close: string; closed: boolean }>) => form.setData('hours', { ...form.data.hours, [d]: { ...form.data.hours[d], ...patch } });
 
     return (
@@ -983,6 +987,39 @@ function HoursCard({ hours, holidays }: { hours: Record<string, DayHours> | null
                         </button>
                     </div>
                     <FieldError msg={Object.entries(form.errors as Record<string, string>).find(([k]) => k.startsWith('holidays'))?.[1]} />
+                </div>
+                <div className="notice" style={{ display: 'block' }}>
+                    <label className="check" style={{ margin: 0 }}>
+                        <input type="checkbox" checked={form.data.liveBooking} onChange={(e) => form.setData('liveBooking', e.target.checked)} />
+                        <span>
+                            <b style={{ color: 'var(--text)' }}>Let the bot book appointments during the call</b>
+                            <span style={{ display: 'block' }}>
+                                It checks free times inside these hours, skips times already booked{calendarConnected ? ' and busy in your Google Calendar' : ''}, and confirms the slot to the caller. Without this, it only takes a booking request.
+                                {!calendarConnected && (
+                                    <>
+                                        {' '}
+                                        <a href="/integrations" className="link">
+                                            Connect Google Calendar
+                                        </a>{' '}
+                                        to add bookings to it automatically.
+                                    </>
+                                )}
+                            </span>
+                        </span>
+                    </label>
+                    {form.data.liveBooking && (
+                        <div className="field" style={{ marginTop: 10, maxWidth: 240 }}>
+                            <label htmlFor="slot">Appointment length</label>
+                            <select id="slot" className="select" value={form.data.slotMinutes} onChange={(e) => form.setData('slotMinutes', +e.target.value)}>
+                                {[15, 20, 30, 45, 60, 90, 120].map((m) => (
+                                    <option key={m} value={m}>
+                                        {m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}`}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    <FieldError msg={(form.errors as Record<string, string>).liveBooking} />
                 </div>
                 <div className="form-foot">
                     <span>{form.isDirty ? 'Unsaved changes' : 'Saved'}</span>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Services\AvailabilityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -33,6 +34,8 @@ class BookingController extends Controller
                     'phone' => $b->phone,
                     'request' => $b->request,
                     'when' => $b->preferred_time,
+                    'startsAt' => $b->starts_at?->toIso8601String(),
+                    'inCalendar' => (bool) $b->google_event_id,
                     'status' => $b->status,
                     'callId' => $b->call_id,
                     'createdAt' => $b->created_at->toIso8601String(),
@@ -52,6 +55,10 @@ class BookingController extends Controller
         abort_unless($booking->bot_id === $request->user()->bot->id, 404);
         $data = $request->validate(['status' => ['required', Rule::in(Booking::STATUSES)]]);
         $booking->update($data);
+        // Lost / spam frees the time slot and removes the Google Calendar event.
+        if (in_array($data['status'], AvailabilityService::RELEASED, true)) {
+            app(AvailabilityService::class)->release($booking->setRelation('bot', $request->user()->bot));
+        }
 
         return back()->with('success', 'Booking marked as '.$data['status']);
     }

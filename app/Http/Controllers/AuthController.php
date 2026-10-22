@@ -38,6 +38,9 @@ class AuthController extends Controller
             Auth::logout();
             throw ValidationException::withMessages(['email' => 'This account is suspended. Contact support.']);
         }
+        if ($request->user()->hasTwoFactor()) {
+            return TwoFactorController::startChallenge($request, $request->user(), $request->boolean('remember'));
+        }
 
         $request->session()->regenerate();
 

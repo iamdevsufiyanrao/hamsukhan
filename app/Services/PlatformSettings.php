@@ -69,6 +69,9 @@ class PlatformSettings
         'elevenlabs_api_key' => ['hamsukhan.elevenlabs.api_key', 'string', true, 'providers'],
         'elevenlabs_model' => ['hamsukhan.elevenlabs.model', 'string', false, 'providers'],
         'openai_api_key' => ['hamsukhan.openai.api_key', 'string', true, 'providers'],
+        // Google Calendar OAuth client
+        'google_client_id' => ['hamsukhan.google.client_id', 'string', false, 'providers'],
+        'google_client_secret' => ['hamsukhan.google.client_secret', 'string', true, 'providers'],
         // WhatsApp Cloud API (Meta) for owner alerts
         'whatsapp_token' => ['hamsukhan.whatsapp.token', 'string', true, 'providers'],
         'whatsapp_phone_id' => ['hamsukhan.whatsapp.phone_number_id', 'string', false, 'providers'],

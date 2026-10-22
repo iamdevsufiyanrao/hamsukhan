@@ -44,6 +44,9 @@ class BotStudioController extends Controller
                 'hours' => $bot->business_hours,
                 'holidays' => $bot->holidays ?? [],
                 'allowedDomains' => $bot->allowed_domains ?? [],
+                'liveBooking' => $bot->live_booking,
+                'slotMinutes' => $bot->slot_minutes,
+                'calendarConnected' => (bool) $user->googleCalendar,
                 'live' => $this->vapi->isLive($bot),
             ],
             'providers' => ['vapi' => $this->vapi->enabled(), 'elevenlabs' => app(\App\Services\ElevenLabsService::class)->enabled()],
@@ -165,11 +168,19 @@ class BotStudioController extends Controller
             'holidays' => ['present', 'array', 'max:60'],
             'holidays.*.date' => ['required', 'date_format:Y-m-d'],
             'holidays.*.note' => ['nullable', 'string', 'max:60'],
+            'liveBooking' => ['boolean'],
+            'slotMinutes' => ['nullable', 'integer', Rule::in([15, 20, 30, 45, 60, 90, 120])],
         ]);
+        $hours = BusinessHours::normalize($data['hours']);
+        if ($request->boolean('liveBooking') && ! $hours) {
+            return back()->withErrors(['liveBooking' => 'Set your opening hours first, the bot books only inside them.']);
+        }
 
         return $this->save($request->user()->bot, [
-            'business_hours' => BusinessHours::normalize($data['hours']),
+            'business_hours' => $hours,
             'holidays' => BusinessHours::normalizeHolidays($data['holidays']),
+            'live_booking' => $request->boolean('liveBooking'),
+            'slot_minutes' => $data['slotMinutes'] ?? 30,
         ], 'Opening hours saved, your bot knows them now');
     }
 

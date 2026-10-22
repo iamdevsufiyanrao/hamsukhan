@@ -252,8 +252,9 @@ function MailTab({ values }: { values: Values }) {
 }
 
 function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: string }) {
-    const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key', 'whatsapp_token'];
-    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang'];
+    const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key', 'whatsapp_token', 'google_client_secret'];
+    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang', 'google_client_id'];
+    const googleRedirect = `${window.location.origin}/integrations/google/callback`;
     const [waTo, setWaTo] = useState('');
     const form = useForm<Values>({ ...Object.fromEntries(secretKeys.map((k) => [k, ''])), ...Object.fromEntries(plainKeys.map((k) => [k, values[k] ?? ''])) });
     const { toast } = useUI();
@@ -361,6 +362,31 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
                         <Icon name="wave" className="i i-sm" />
                         3. Voices in the ElevenLabs account
                     </Link>
+                </div>
+            </div>
+            <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-h">
+                    <div>
+                        <h3>Google Calendar: live bookings</h3>
+                        <p>console.cloud.google.com → APIs &amp; Services: enable &quot;Google Calendar API&quot;, then Credentials → OAuth client ID → Web application.</p>
+                    </div>
+                </div>
+                <div className="card-b grid-2">
+                    <div className="field">
+                        <label htmlFor="google_client_id">Client ID</label>
+                        <input id="google_client_id" className="input mono" value={form.data.google_client_id} onChange={(e) => form.setData('google_client_id', e.target.value)} />
+                    </div>
+                    {SecretField({ k: 'google_client_secret', label: 'Client secret' })}
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Authorised redirect URI to paste in Google</label>
+                        <div className="secret-box">
+                            <code className="mono">{googleRedirect}</code>
+                            <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => navigator.clipboard?.writeText(googleRedirect).then(() => toast('Copied'))}>
+                                <Icon name="copy" className="i i-sm" />
+                            </button>
+                        </div>
+                        <span className="hint">On the OAuth consent screen, publish the app (or add your customers as test users), otherwise Google blocks their sign-in.</span>
+                    </div>
                 </div>
             </div>
             <div className="card" style={{ marginBottom: 16 }}>

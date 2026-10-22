@@ -2,6 +2,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { Avatar, FieldError, Modal, PasswordInput } from '@/components/ui';
+import SecuritySection, { type DeviceSession, type TwoFactor } from '@/components/SecuritySection';
 import AppLayout from '@/layouts/AppLayout';
 import { timeAgo } from '@/lib/format';
 import type { SharedProps } from '@/types';
@@ -16,7 +17,7 @@ type Notifications = {
     whatsappAvailable: boolean;
     recent: { kind: string; channel: string; status: string; error: string | null; at: string }[];
 };
-type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications };
+type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications; twoFactor: TwoFactor; sessions: DeviceSession[] };
 
 const KIND_LABEL: Record<string, string> = { lead: 'New lead', low_balance: 'Low balance', daily_summary: 'Daily summary', integration_failed: 'Connector failed', cap_reached: 'Spending limit' };
 
@@ -85,7 +86,7 @@ function NotificationsSection({ n }: { n: Notifications }) {
     );
 }
 
-export default function Settings({ profile, timezones, notifications }: Props) {
+export default function Settings({ profile, timezones, notifications, twoFactor, sessions }: Props) {
     const { auth } = usePage<SharedProps>().props;
     const user = auth!.user;
     const info = useForm(profile);
@@ -173,6 +174,7 @@ export default function Settings({ profile, timezones, notifications }: Props) {
                     </div>
 
                     {auth?.bot && <NotificationsSection n={notifications} />}
+                    <SecuritySection twoFactor={twoFactor} sessions={sessions} />
 
                     <div className="set-grid">
                         <div>

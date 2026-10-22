@@ -21,6 +21,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->make(PlatformSettings::class)->apply();
 
         // Own key per limiter: plain "throttle:x,y" middlewares on the same route share one counter.
-        RateLimiter::for('widget-callback', fn (Request $request) => Limit::perMinutes(10, 5)->by('callback:'.$request->ip().':'.$request->route('publicKey')));
+        // 5 code tries per minute per pending login (and per IP), separate from the login form's own limit.
+        RateLimiter::for('two-factor', fn (Request $request) => Limit::perMinute(5)->by('2fa:'.$request->path().':'.$request->ip().':'.($request->session()->get('two_factor.login')['id'] ?? $request->user()?->id ?? '-')));
+        RateLimiter::for('widget-callback',fn (Request $request) => Limit::perMinutes(10, 5)->by('callback:'.$request->ip().':'.$request->route('publicKey')));
     }
 }

@@ -12,7 +12,7 @@ class Bot extends Model
     protected $fillable = [
         'business_name', 'website', 'greeting', 'end_message', 'language', 'prompt', 'quick_facts', 'capture_fields',
         'max_call_minutes', 'voice_id', 'preset_voice', 'widget', 'vapi_assistant_id', 'synced_at',
-        'is_active', 'installed_at', 'allowed_domains', 'business_hours', 'holidays',
+        'is_active', 'installed_at', 'allowed_domains', 'business_hours', 'holidays', 'live_booking', 'slot_minutes',
     ];
 
     protected function casts(): array
@@ -23,6 +23,7 @@ class Bot extends Model
             'allowed_domains' => 'array',
             'business_hours' => 'array',
             'holidays' => 'array',
+            'live_booking' => 'boolean',
             'is_active' => 'boolean',
             'synced_at' => 'datetime',
             'installed_at' => 'datetime',
@@ -123,6 +124,13 @@ class Bot extends Model
         - Speak in short, natural sentences. Reply in the caller's language: Urdu, English or a mix.
         TXT;
 
+    public const LIVE_BOOKING_RULES = <<<'TXT'
+        Booking appointments (you can book directly):
+        - Use check_availability for the day the caller wants before suggesting any time. Only offer times it returns.
+        - When the caller picks a time, collect their name and phone/WhatsApp number, repeat the day and time back, then call book_appointment.
+        - Only say the appointment is booked after book_appointment confirms it. If it says the time is taken, offer the other free times.
+        TXT;
+
     /** The system prompt actually sent to the LLM: instructions + quick facts + fixed safety rules. */
     public function systemPrompt(): string
     {
@@ -135,6 +143,7 @@ class Bot extends Model
             .($collect !== '' ? "\n\n".$collect : '')
             .($facts !== '' ? "\n\nFacts you must know:\n".$facts : '')
             .($hours !== '' ? "\n\n".$hours : '')
+            .($this->live_booking && $this->business_hours ? "\n\n".self::LIVE_BOOKING_RULES : '')
             ."\n\n".self::SAFETY_RULES
             ."\n\n".'Today is {{"now" | date: "%A %d %B %Y, %I:%M %p", "Asia/Karachi"}} (Pakistan time).'; // Vapi fills this in per call
     }

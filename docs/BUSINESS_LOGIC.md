@@ -174,3 +174,9 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - **Lead statuses**: new, contacted, confirmed (booked), done (won), lost, spam.
 - **Email verification**: always sent on signup; enforced only when Admin → Site → "Require email verification" is on. Accounts that existed before 2026-10-22 were marked verified.
 - **Ops**: every response has `X-Request-Id` (also in log context); unexpected production errors are emailed to `alert_email` (same error once per 30 min).
+
+## Live booking, Google Calendar, two-step login (2026-10-22)
+- **Live booking** (`bots.live_booking`, `slot_minutes`; needs opening hours): Vapi gets two function tools, `check_availability` and `book_appointment`, answered at the Vapi webhook (`tool-calls`). Free slots = opening hours − holidays − bookings not lost/spam − Google busy times; no slot starts within 30 minutes. Booking re-checks the slot under a lock on the bot row (no double booking); same call + same time twice returns the same booking. Live bookings carry `vapi_call_id`; the end-of-call report links them (no duplicate, no second alert or connector delivery).
+- **Google Calendar** (`google_calendars`, tokens encrypted): owner connects in Integrations (OAuth, state-checked). Bookings made live become events in the primary calendar; marking one lost/spam deletes the event. If Google fails, slots still come from our own bookings and the error shows on Integrations.
+- **Two-step login** (`users.two_factor_*`): TOTP app + 8 single-use recovery codes (stored hashed). The login asks for the code before signing in; 5 tries/minute per pending login. "Log out other devices" deletes other DB sessions and rotates the remember token.
+- **Audio**: only one sound plays at a time in the app (`resources/js/lib/audioFocus.ts`).

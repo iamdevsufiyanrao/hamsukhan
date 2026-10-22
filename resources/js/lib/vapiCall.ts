@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { claimAudio } from './audioFocus';
 
 export type CallPhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 export type Turn = { role: 'user' | 'ai'; text: string };
@@ -38,6 +39,8 @@ export function useVapiCall(onEnded?: () => void) {
         setTurns([]);
         setPartial(null);
         setPhase('connecting');
+        // A call silences any sample or recording that is playing (and is never stopped by one).
+        claimAudio({ stop: () => {} });
         try {
             // @ts-ignore: loaded from the CDN only when a real call starts
             const { default: Vapi } = await import(/* @vite-ignore */ SDK_URL);
