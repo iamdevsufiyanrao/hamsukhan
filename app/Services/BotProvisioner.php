@@ -20,7 +20,8 @@ class BotProvisioner
             'preset_voice' => config('hamsukhan.preset_voices.0.id'),
         ]);
 
-        $this->vapi->syncAssistant($bot);
+        // Never let a provider problem block signup: the bot is saved either way and the error shows in Bot Studio.
+        $this->vapi->trySync($bot);
 
         return $bot;
     }

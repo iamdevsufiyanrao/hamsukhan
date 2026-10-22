@@ -15,7 +15,9 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
                     <p className="sub">{subtitle}</p>
                     {children}
                 </div>
-                <div className="auth-foot">© {new Date().getFullYear()} Hamsukhan · Privacy · Terms</div>
+                <div className="auth-foot">
+                    © {new Date().getFullYear()} Hamsukhan · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+                </div>
             </div>
 
             <div className="auth-art" aria-hidden="true">
@@ -26,9 +28,9 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
                 </div>
                 <div>
                     <h2>
-                        Your voice. <b>Answering every call.</b>
+                        Website visitors. <b>Turned into bookings.</b>
                     </h2>
-                    <p className="lead">Hamsukhan picks up for your business in your own cloned voice, taking bookings, answering questions and logging every conversation.</p>
+                    <p className="lead">Hamsukhan is an AI voice receptionist on your website. Visitors talk in Urdu or English, it answers approved questions and sends you a clean booking or callback request.</p>
                 </div>
                 <div className="art-call">
                     <div className="h">
@@ -41,7 +43,7 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
                 <div className="art-feats">
                     <div>
                         <Icon name="mic" className="i i-sm" />
-                        Voice cloning
+                        Urdu + English
                     </div>
                     <div>
                         <Icon name="calendar" className="i i-sm" />
@@ -49,7 +51,7 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
                     </div>
                     <div>
                         <Icon name="phone" className="i i-sm" />
-                        Every call recorded
+                        Callback requests
                     </div>
                 </div>
             </div>

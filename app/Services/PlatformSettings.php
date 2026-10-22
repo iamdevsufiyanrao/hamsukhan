@@ -30,6 +30,8 @@ class PlatformSettings
         'announcement' => ['hamsukhan.site.announcement', 'text', false, 'site'],
         'terms_url' => ['hamsukhan.site.terms_url', 'url', false, 'site'],
         'privacy_url' => ['hamsukhan.site.privacy_url', 'url', false, 'site'],
+        'whatsapp_number' => ['hamsukhan.site.whatsapp', 'string', false, 'site'],
+        'demo_bot_key' => ['hamsukhan.demo.bot_key', 'string', false, 'site'],
         // SEO
         'seo_title' => ['hamsukhan.seo.title', 'string', false, 'seo'],
         'seo_description' => ['hamsukhan.seo.description', 'text', false, 'seo'],

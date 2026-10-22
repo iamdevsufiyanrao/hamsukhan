@@ -12,7 +12,7 @@ class Booking extends Model
 
     public const TYPES = ['booking', 'order', 'callback'];
 
-    protected $fillable = ['call_id', 'type', 'customer_name', 'phone', 'request', 'preferred_time', 'details', 'status'];
+    protected $fillable = ['call_id', 'type', 'source','customer_name', 'phone', 'request', 'preferred_time', 'details', 'status'];
 
     protected function casts(): array
     {

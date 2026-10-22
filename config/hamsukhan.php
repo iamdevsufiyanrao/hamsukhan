@@ -52,6 +52,7 @@ return [
         'name' => env('APP_NAME', 'Hamsukhan'),
         'support_email' => env('HAMSUKHAN_SUPPORT_EMAIL'),
         'support_phone' => env('HAMSUKHAN_SUPPORT_PHONE'),
+        'whatsapp' => env('HAMSUKHAN_WHATSAPP'),
         'allow_signups' => true,
         'announcement' => null,
         'terms_url' => null,
@@ -77,17 +78,42 @@ return [
 
     'outcome_tags' => ['Booking', 'Order', 'Enquiry', 'Pricing', 'Support', 'No outcome'],
 
+    /*
+    | Languages the bot can be set to. Only languages with their own QA are listed (Pakistan-first).
+    | `code` goes to the transcriber; "Urdu + English" transcribes multilingual so callers can code-switch.
+    */
     'languages' => [
         'English' => 'en',
         'Urdu' => 'ur',
-        'Arabic' => 'ar',
-        'Hindi' => 'hi',
-        'Spanish' => 'es',
+        'Urdu + English' => 'multi',
     ],
 
+    /*
+    | Speech-to-text inside Vapi per language code. Deepgram has no Urdu model, so Urdu and mixed calls use
+    | ElevenLabs Scribe (which handles Urdu/English code-switching). Overridable per code via config.
+    */
+    'transcribers' => [
+        'en' => ['provider' => 'deepgram', 'model' => 'nova-2', 'language' => 'en'],
+        'ur' => ['provider' => '11labs', 'model' => 'scribe_v1', 'language' => 'ur'],
+        'multi' => ['provider' => '11labs', 'model' => 'scribe_v1'],
+    ],
+
+    /*
+    | Stock voices offered before an owner clones their own. `voice_id` is a real ElevenLabs premade voice
+    | (works through Vapi without cloning). Change them with HAMSUKHAN_VOICE_* in .env.
+    */
     'preset_voices' => [
-        ['id' => 'preset_john', 'name' => 'John · male (en-UK)'],
-        ['id' => 'preset_sara', 'name' => 'Sara · female (en-US)'],
-        ['id' => 'preset_ahmed', 'name' => 'Ahmed · male (ur-PK)'],
+        ['id' => 'preset_sara', 'name' => 'Sarah · female, professional (default)', 'voice_id' => env('HAMSUKHAN_VOICE_SARA', 'EXAVITQu4vr4xnSDxMaL')],
+        ['id' => 'preset_john', 'name' => 'George · male, warm', 'voice_id' => env('HAMSUKHAN_VOICE_JOHN', 'JBFqnCBsd6RMkjVDRZzb')],
+        ['id' => 'preset_ahmed', 'name' => 'Brian · male, calm', 'voice_id' => env('HAMSUKHAN_VOICE_AHMED', 'nPczCjzI2devNBz1zQrb')],
+    ],
+
+    /*
+    | Public demo on the landing page: never billed to any wallet, capped and rate limited.
+    */
+    'demo' => [
+        'bot_key' => env('HAMSUKHAN_DEMO_BOT_KEY'),
+        'max_seconds' => 90,
+        'per_ip_per_hour' => 5,
     ],
 ];

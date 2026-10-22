@@ -210,6 +210,6 @@ class IntegrationTest extends TestCase
         $this->assertStringContainsString('delivery address, items', $user->bot->fresh()->systemPrompt());
 
         $schema = app(\App\Services\VapiService::class)->assistantPayload($user->bot->fresh());
-        $this->assertSame('array', $schema['analysisPlan']['structuredDataSchema']['properties']['booking']['properties']['details']['properties']->items['type']);
+        $this->assertSame('array', $schema['analysisPlan']['structuredDataPlan']['schema']['properties']['booking']['properties']['details']['properties']->items['type']);
     }
 }

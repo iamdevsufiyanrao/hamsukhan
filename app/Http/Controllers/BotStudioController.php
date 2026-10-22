@@ -26,6 +26,7 @@ class BotStudioController extends Controller
         return Inertia::render('BotStudio', [
             'tab' => in_array($request->query('tab'), $tabs, true) ? $request->query('tab') : 'configure',
             'bot' => [
+                'businessName' => $bot->business_name,
                 'greeting' => $bot->greeting,
                 'endMessage' => $bot->end_message,
                 'language' => $bot->language,
@@ -38,7 +39,10 @@ class BotStudioController extends Controller
                 'widget' => $bot->widget,
                 'publicKey' => $bot->public_key,
                 'installedAt' => $bot->installed_at?->toIso8601String(),
+                'syncError' => $bot->sync_error,
+                'live' => $this->vapi->isLive($bot),
             ],
+            'providers' => ['vapi' => $this->vapi->enabled(), 'elevenlabs' => app(\App\Services\ElevenLabsService::class)->enabled()],
             'voices' => $user->voices()->latest()->get()->map(fn (Voice $v) => [
                 'id' => $v->id,
                 'name' => $v->name,
@@ -46,6 +50,8 @@ class BotStudioController extends Controller
                 'seconds' => $v->sample_seconds,
                 'status' => $v->status,
                 'hasSample' => (bool) $v->sample_path,
+                // Recorded before ElevenLabs was connected: it gets cloned on ElevenLabs on the next sync.
+                'pending' => \App\Services\ElevenLabsService::isSimulatedId($v->provider_voice_id) && app(\App\Services\ElevenLabsService::class)->enabled(),
             ]),
             'files' => $bot->knowledgeFiles->sortByDesc('created_at')->values()->map(fn (KnowledgeFile $f) => [
                 'id' => $f->id,
@@ -72,7 +78,8 @@ class BotStudioController extends Controller
             'greeting' => ['required', 'string', 'max:300'],
             'endMessage' => ['nullable', 'string', 'max:300'],
             'language' => ['required', Rule::in(array_keys(config('hamsukhan.languages')))],
-            'prompt' => ['required', 'string', 'max:4000'],
+            'prompt' => ['required', 'string', 'max:6000'],
+            'businessName' => ['nullable', 'string', 'max:100'],
             'maxCallMinutes' => ['required', 'integer', Rule::in([5, 10, 15])],
         ]);
 
@@ -82,6 +89,7 @@ class BotStudioController extends Controller
             'language' => $data['language'],
             'prompt' => $data['prompt'],
             'max_call_minutes' => $data['maxCallMinutes'],
+            ...($request->has('businessName') ? ['business_name' => $data['businessName']] : []),
         ], 'Bot updated, live on your site');
     }
 
@@ -145,16 +153,20 @@ class BotStudioController extends Controller
         return back()->with('success', 'Widget saved');
     }
 
+    /** "Retry" button in Bot Studio when the last sync with Vapi failed. */
+    public function sync(Request $request): RedirectResponse
+    {
+        $error = $this->vapi->trySync($request->user()->bot);
+
+        return back()->with($error ? 'error' : 'success', $error ? 'Vapi sync failed: '.$error : 'Bot is live on Vapi');
+    }
+
     private function save(Bot $bot, array $attributes, string $message): RedirectResponse
     {
         $bot->update($attributes);
 
-        try {
-            $this->vapi->syncAssistant($bot->fresh());
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'Saved, but syncing with Vapi failed. We will retry on the next save.');
+        if ($error = $this->vapi->trySync($bot->fresh())) {
+            return back()->with('error', 'Saved, but Vapi sync failed: '.$error);
         }
 
         return back()->with('success', $message);

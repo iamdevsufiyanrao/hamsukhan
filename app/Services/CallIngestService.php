@@ -7,6 +7,7 @@ use App\Models\Bot;
 use App\Models\Call;
 use App\Services\Integrations\IntegrationDispatcher;
 use App\Support\CaptureFields;
+use App\Support\Phone;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -45,11 +46,12 @@ class CallIngestService
                 'outcome_tag' => in_array(Arr::get($structured, 'outcome'), config('hamsukhan.outcome_tags'), true) ? $structured['outcome'] : 'No outcome',
                 'status' => $status,
                 'ended_reason' => Arr::get($message, 'endedReason'),
-                'is_test' => (bool) Arr::get($message, 'call.metadata.isTest', false),
+                'is_test' => (bool) (Arr::get($message, 'call.metadata.isTest') || Arr::get($message, 'call.metadata.isDemo')),
                 'started_at' => $started,
                 'ended_at' => $ended,
                 'duration_seconds' => $duration,
-                'cost' => $this->wallet->costFor($duration),
+                // The landing-page demo and failed connections are never billed.
+                'cost' => Arr::get($message, 'call.metadata.isDemo') || $status === 'failed' ? 0 : $this->wallet->costFor($duration),
                 'recording_url' => Arr::get($message, 'recordingUrl') ?? Arr::get($message, 'artifact.recordingUrl'),
                 'summary' => Arr::get($message, 'analysis.summary') ?? Arr::get($message, 'summary'),
             ]);
@@ -64,7 +66,7 @@ class CallIngestService
                     'call_id' => $call->id,
                     'type' => $this->bookingType($booking['type'] ?? null, $structured['outcome'] ?? null),
                     'customer_name' => $booking['customerName'],
-                    'phone' => $booking['phone'] ?? null,
+                    'phone' => Phone::clean($booking['phone'] ?? null),
                     'request' => $booking['request'],
                     'preferred_time' => $booking['preferredTime'] ?? null,
                     'details' => CaptureFields::extract($bot->capture_fields ?? [], (array) ($booking['details'] ?? [])) ?: null,

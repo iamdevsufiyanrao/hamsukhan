@@ -14,6 +14,8 @@ use App\Http\Controllers\CallController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\KnowledgeFileController;
+use App\Http\Controllers\LegalController;
+use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TestCallController;
 use App\Http\Controllers\VoiceController;
@@ -27,6 +29,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [VoiceSampleController::class, 'landing'])->name('home');
 Route::get('/voice-samples/{sample}/play', [VoiceSampleController::class, 'play'])->middleware(['signed', 'throttle:60,1'])->name('voice-samples.play');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact');
+Route::get('/terms', [LegalController::class, 'terms'])->name('terms');
+Route::get('/privacy', [LegalController::class, 'privacy'])->name('privacy');
 
 // ---------- Guests ----------
 Route::middleware('guest')->group(function () {
@@ -66,6 +70,11 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
         Route::patch('/settings/{group}', [AdminSettingsController::class, 'update'])->name('settings.update');
         Route::delete('/settings/secret/{key}', [AdminSettingsController::class, 'clearSecret'])->name('settings.secret');
         Route::post('/settings/test/{provider}', [AdminSettingsController::class, 'test'])->middleware('throttle:10,1')->name('settings.test');
+        Route::post('/settings/link-elevenlabs', [AdminSettingsController::class, 'linkElevenLabs'])->middleware('throttle:10,1')->name('settings.link-elevenlabs');
+        Route::post('/settings/resync-bots', [AdminSettingsController::class, 'resyncBots'])->middleware('throttle:5,1')->name('settings.resync');
+
+        Route::get('/provider-voices', [ProviderVoiceController::class, 'index'])->name('provider-voices');
+        Route::post('/provider-voices/assign', [ProviderVoiceController::class, 'assign'])->name('provider-voices.assign');
         Route::post('/settings/connectors/{integration}/toggle', [AdminSettingsController::class, 'toggleConnector'])->name('settings.connector');
         Route::post('/settings/cron/run', [AdminSettingsController::class, 'runCron'])->name('settings.cron');
         Route::get('/settings/package.zip', [IntegrationController::class, 'package'])->name('settings.package');
@@ -96,8 +105,10 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureBot::class])->group(
     Route::patch('/bot-studio/voice', [BotStudioController::class, 'updateVoice'])->name('bot.voice');
     Route::patch('/bot-studio/knowledge', [BotStudioController::class, 'updateKnowledge'])->name('bot.knowledge');
     Route::patch('/bot-studio/widget', [BotStudioController::class, 'updateWidget'])->name('bot.widget');
+    Route::post('/bot-studio/sync', [BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
 
-    Route::post('/voices', [VoiceController::class, 'store'])->name('voices.store');
+    Route::post('/voices', [VoiceController::class, 'store'])->middleware('throttle:10,1')->name('voices.store');
+    Route::post('/voices/{voice}/push', [VoiceController::class, 'push'])->middleware('throttle:10,1')->name('voices.push');
     Route::get('/voices/{voice}/sample', [VoiceController::class, 'sample'])->name('voices.sample');
     Route::delete('/voices/{voice}', [VoiceController::class, 'destroy'])->name('voices.destroy');
 

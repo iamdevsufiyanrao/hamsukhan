@@ -4,6 +4,7 @@ import Icon, { IconName } from '@/components/Icon';
 import { FieldError, Modal, Seg, useUI } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
 import { fileSize, fmtDate, fmtDateLong } from '@/lib/format';
+import { startWavRecording, type WavRecording } from '@/lib/wavRecorder';
 
 type Tab = 'configure' | 'voice' | 'knowledge' | 'widget' | 'embed';
 type WState = 'idle' | 'loading' | 'active' | 'error';
@@ -15,6 +16,7 @@ type CaptureField = { key?: string; label: string; type: string; required: boole
 type Props = {
     tab: Tab;
     bot: {
+        businessName: string | null;
         greeting: string;
         endMessage: string | null;
         language: string;
@@ -27,8 +29,11 @@ type Props = {
         widget: Widget;
         publicKey: string;
         installedAt: string | null;
+        syncError: string | null;
+        live: boolean;
     };
-    voices: { id: number; name: string; createdAt: string; seconds: number; status: string; hasSample: boolean }[];
+    providers: { vapi: boolean; elevenlabs: boolean };
+    voices: { id: number; name: string; createdAt: string; seconds: number; status: string; hasSample: boolean; pending: boolean }[];
     files: { id: number; name: string; size: number; status: string; createdAt: string }[];
     options: {
         languages: string[];
@@ -97,6 +102,7 @@ export default function BotStudio(props: Props) {
                 ))}
             </div>
 
+            <SyncBanner bot={bot} providers={props.providers} />
             <div className="studio">
                 <div>
                     {tab === 'configure' && (
@@ -133,10 +139,35 @@ export default function BotStudio(props: Props) {
 
 BotStudio.layout = (page: React.ReactNode) => <AppLayout>{page}</AppLayout>;
 
+/** Tells the owner, in plain words, whether the bot really reached Vapi, and why not. */
+function SyncBanner({ bot, providers }: { bot: Props['bot']; providers: Props['providers'] }) {
+    const [busy, setBusy] = useState(false);
+    const box = (tone: 'warn' | 'danger' | 'info', body: React.ReactNode, retry = false) => (
+        <div className="card" style={{ marginBottom: 16, borderColor: `var(--${tone})`, background: `var(--${tone}-soft)` }}>
+            <div className="card-b" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Icon name="alert" />
+                <div style={{ flex: 1, minWidth: 220 }}>{body}</div>
+                {retry && (
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => router.post('/bot-studio/sync', {}, { preserveScroll: true, onStart: () => setBusy(true), onFinish: () => setBusy(false) })}>
+                        <Icon name={busy ? 'loader' : 'refresh'} className={busy ? 'i i-sm spin' : 'i i-sm'} />
+                        {busy ? 'Syncing…' : 'Retry sync'}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
+    if (!providers.vapi) return box('info', <><b>Demo mode.</b> Voice calls are simulated until the platform's Vapi keys are added. You can still set everything up.</>);
+    if (bot.syncError) return box('danger', <><b>Your bot is not live on Vapi yet.</b> {bot.syncError}</>, true);
+    if (!bot.live) return box('warn', <><b>Your bot has not been sent to Vapi yet.</b> Save any tab or press Retry.</>, true);
+
+    return null;
+}
+
 /* ---------- Configure ---------- */
 function ConfigurePane({ bot, languages }: { bot: Props['bot']; languages: string[] }) {
     const { toast } = useUI();
-    const form = useForm({ greeting: bot.greeting, endMessage: bot.endMessage ?? '', language: bot.language, prompt: bot.prompt, maxCallMinutes: bot.maxCallMinutes });
+    const form = useForm({ businessName: bot.businessName ?? '', greeting: bot.greeting, endMessage: bot.endMessage ?? '', language: bot.language, prompt: bot.prompt, maxCallMinutes: bot.maxCallMinutes });
     const save = () => form.patch('/bot-studio/config', { preserveScroll: true, onSuccess: () => form.setDefaults() });
 
     return (
@@ -148,6 +179,11 @@ function ConfigurePane({ bot, languages }: { bot: Props['bot']; languages: strin
                 </div>
             </div>
             <div className="card-b stack">
+                <div className="field">
+                    <label htmlFor="biz">Business name</label>
+                    <input id="biz" className={'input' + (form.errors.businessName ? ' bad' : '')} placeholder="e.g. Bloom Salon, DHA Karachi" value={form.data.businessName} onChange={(e) => form.setData('businessName', e.target.value)} />
+                    <FieldError msg={form.errors.businessName} />
+                </div>
                 <div className="grid-2" style={{ gridTemplateColumns: '1fr 200px' }}>
                     <div className="field">
                         <label htmlFor="greet">Greeting message</label>
@@ -182,8 +218,9 @@ function ConfigurePane({ bot, languages }: { bot: Props['bot']; languages: strin
                     <label htmlFor="prompt">
                         Instructions <span className="hint">(the prompt your bot follows on every call)</span>
                     </label>
-                    <textarea id="prompt" className={'textarea' + (form.errors.prompt ? ' bad' : '')} value={form.data.prompt} onChange={(e) => form.setData('prompt', e.target.value)} maxLength={4000} />
-                    <div className="counter">{form.data.prompt.length} / 4000</div>
+                    <textarea id="prompt" className={'textarea' + (form.errors.prompt ? ' bad' : '')} value={form.data.prompt} onChange={(e) => form.setData('prompt', e.target.value)} maxLength={6000} />
+                    <div className="counter">{form.data.prompt.length} / 6000</div>
+                    <span className="hint">Safety rules are always added on top: the bot says it is an AI, only quotes your approved facts, offers a callback when unsure, and never asks for card details or CNIC.</span>
                     <FieldError msg={form.errors.prompt} />
                 </div>
                 <div className="grid-2">
@@ -368,10 +405,23 @@ function VoicePane({ bot, voices, options }: { bot: Props['bot']; voices: Props[
                                 <span className="v-tx">
                                     <b>{v.name}</b>
                                     <span>
-                                        Cloned {fmtDateLong(v.createdAt)} · {v.seconds}s sample{v.id === bot.voiceId ? ' · In use' : ''}
+                                        {v.seconds ? `Cloned ${fmtDateLong(v.createdAt)} · ${v.seconds}s sample` : `Added ${fmtDateLong(v.createdAt)} from ElevenLabs`}
+                                        {v.id === bot.voiceId ? ' · In use' : ''}
+                                        {v.pending ? ' · not on ElevenLabs yet' : ''}
                                     </span>
                                 </span>
                                 <span className="v-act">
+                                    {v.pending && (
+                                        <button
+                                            title="Upload to ElevenLabs"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.post(`/voices/${v.id}/push`, {}, { preserveScroll: true });
+                                            }}
+                                        >
+                                            <Icon name="upload" className="i i-sm" />
+                                        </button>
+                                    )}
                                     <button
                                         title="Preview sample"
                                         onClick={(e) => {
@@ -421,31 +471,44 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
     const [levels, setLevels] = useState<number[]>(Array(18).fill(4));
     const [blob, setBlob] = useState<Blob | null>(null);
     const form = useForm<{ name: string; consent: boolean; seconds: number; sample: File | null }>({ name: '', consent: false, seconds: 0, sample: null });
-    const rec = useRef<{ mr: MediaRecorder; stream: MediaStream; ctx: AudioContext; raf: number; timer: number; started: number } | null>(null);
+    const rec = useRef<{ wav: WavRecording; raf: number; timer: number; started: number; peak: number } | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    const stop = () => {
+    /** Stops the mic. keep=true turns what was recorded into the sample. */
+    const stop = async (keep = true) => {
         const r = rec.current;
         if (!r) return;
         rec.current = null;
         window.clearInterval(r.timer);
         cancelAnimationFrame(r.raf);
-        if (r.mr.state !== 'inactive') r.mr.stop();
-        r.stream.getTracks().forEach((t) => t.stop());
-        r.ctx.close();
         setRecording(false);
         setLevels(Array(18).fill(4));
+        if (!keep) return r.wav.cancel();
+        const wav = await r.wav.stop();
+        if (r.peak < 0.02) {
+            setSecs(0);
+            return toast('We could not hear anything. Check that the right microphone is selected and not muted, then try again.', 'error');
+        }
+        setBlob(wav);
     };
 
     useEffect(() => {
+        if (!blob) return setPreviewUrl(null);
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [blob]);
+
+    useEffect(() => {
         if (!open) {
-            stop();
+            stop(false);
             setSecs(0);
             setBlob(null);
             form.reset();
             form.clearErrors();
         }
     }, [open]);
-    useEffect(() => () => stop(), []);
+    useEffect(() => () => void stop(false), []);
 
     const fileInput = useRef<HTMLInputElement>(null);
 
@@ -453,10 +516,11 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
     const pickFile = async (file: File | undefined) => {
         if (fileInput.current) fileInput.current.value = '';
         if (!file) return;
-        stop();
+        stop(false);
         if (file.size > 20 * 1024 * 1024) return toast('That file is bigger than 20 MB. Use a shorter clip.', 'error');
         try {
-            const ctx = new AudioContext();
+            const Ctx: typeof AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            const ctx = new Ctx();
             const audio = await ctx.decodeAudioData(await file.arrayBuffer());
             ctx.close();
             const s = Math.floor(audio.duration);
@@ -472,35 +536,23 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
         if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
             return toast('The browser only allows the microphone on a secure (https) link. Open the site with https, or upload a recording instead.', 'error');
         }
-        if (typeof MediaRecorder === 'undefined') {
-            return toast('This browser cannot record audio. Use Chrome, Edge or Safari, or upload a recording instead.', 'error');
-        }
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-            const mr = new MediaRecorder(stream);
-            const chunks: BlobPart[] = [];
-            mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-            mr.onstop = () => setBlob(new Blob(chunks, { type: mr.mimeType || 'audio/webm' }));
-
-            const ctx = new AudioContext();
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 64;
-            ctx.createMediaStreamSource(stream).connect(analyser);
-            const buf = new Uint8Array(analyser.frequencyBinCount);
+            const wav = await startWavRecording();
             const draw = () => {
-                analyser.getByteFrequencyData(buf);
-                setLevels(Array.from({ length: 18 }, (_, i) => 4 + (buf[i + 2] / 255) * 24));
-                if (rec.current) rec.current.raf = requestAnimationFrame(draw);
+                const r = rec.current;
+                if (!r) return;
+                const lvl = r.wav.level();
+                r.peak = Math.max(r.peak, lvl);
+                setLevels(Array.from({ length: 18 }, (_, i) => 4 + Math.min(1, lvl * (0.6 + ((i * 7) % 5) / 6)) * 24));
+                r.raf = requestAnimationFrame(draw);
             };
-
             const started = Date.now();
             const timer = window.setInterval(() => {
                 const s = Math.floor((Date.now() - started) / 1000);
                 setSecs(s);
                 if (s >= 120) stop();
             }, 250);
-            rec.current = { mr, stream, ctx, raf: 0, timer, started };
-            mr.start(1000);
+            rec.current = { wav, raf: 0, timer, started, peak: 0 };
             setBlob(null);
             setSecs(0);
             setRecording(true);
@@ -513,7 +565,7 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
                     : name === 'NotReadableError' || name === 'AbortError'
                       ? 'Your microphone is being used by another app (Zoom, Teams, WhatsApp). Close it and try again.'
                       : name === 'NotAllowedError' || name === 'SecurityError'
-                        ? 'Microphone access is blocked. Click the icon next to the web address, allow the microphone, then try again.'
+                        ? 'Microphone access is blocked. Click the lock icon next to the web address, allow the microphone, then reload the page.'
                         : 'Could not start the microphone. Try again, or upload a recording instead.',
                 'error',
             );
@@ -522,10 +574,9 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
 
     const submit = () => {
         if (!blob) return;
-        const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
-        const sample = blob instanceof File ? blob : new File([blob], `sample.${ext}`, { type: blob.type });
+        const sample = blob instanceof File ? blob : new File([blob], 'sample.wav', { type: 'audio/wav' });
         form.transform((d) => ({ ...d, seconds: secs, sample }));
-        form.post('/voices', { forceFormData: true, preserveScroll: true, onSuccess: () => onClose() });
+        form.post('/voices', { forceFormData: true, preserveScroll: true, onSuccess: (page) => !(page.props as any).flash?.error && onClose() });
     };
 
     const hint = recording ? 'Recording… tap to stop' : secs === 0 ? 'Tap to start recording' : secs >= minSeconds ? 'Recording ready, tap to re-record' : `Too short (${secs}s), at least ${minSeconds} seconds needed`;
@@ -562,6 +613,7 @@ function CloneModal({ open, onClose, minSeconds }: { open: boolean; onClose: () 
                 </div>
                 <div className="rec-hint">{hint}</div>
                 {blob instanceof File && <div className="rec-hint">Using file: {blob.name}</div>}
+                {previewUrl && !recording && <audio controls src={previewUrl} style={{ width: '100%', maxWidth: 320, height: 36 }} />}
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileInput.current?.click()} disabled={recording}>
                     <Icon name="upload" className="i i-sm" />
                     No microphone? Upload a recording

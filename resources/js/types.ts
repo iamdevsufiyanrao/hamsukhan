@@ -28,10 +28,12 @@ export type SharedProps = {
         impersonator: { name: string } | null;
     } | null;
     flash: { success: string | null; error: string | null };
-    site: { name: string; announcement: string | null; allowSignups: boolean; termsUrl: string | null; privacyUrl: string | null; supportEmail: string | null; supportPhone: string | null };
+    site: { name: string; announcement: string | null; allowSignups: boolean; termsUrl: string | null; privacyUrl: string | null; supportEmail: string | null; supportPhone: string | null; whatsapp: string | null; demoBotKey: string | null };
     config: {
         ratePerMinute: number;
         minTopUp: number;
+        ratePerMinutePkr: number;
+        minTopUpPkr: number;
         pkrPerUsd: number;
         accounts: { id: 'jazzcash' | 'easypaisa' | 'bank'; label: string; title: string; number: string }[];
     };

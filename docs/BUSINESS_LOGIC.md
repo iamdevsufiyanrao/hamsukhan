@@ -155,3 +155,12 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - Customer data is always read through the signed-in user's bot (scoped queries); other users' ids return 404.
 - Payment proofs, voice samples and knowledge files are on the private disk; proofs are served to admins only.
 - Login/registration/forgot-password are throttled.
+
+## Launch changes (2026-10-22)
+- **Not billed:** landing-page demo calls (`metadata.isDemo`) and failed connections (`status = failed`) get cost 0.
+- **Demo:** `POST /api/demo/start` talks to the bot set in Admin → Settings → Site → "Live demo bot". Max 90 s, 5 starts per IP per hour; demo calls are pruned after 7 days (`prune-demo-calls`).
+- **Callback request:** `POST /api/widget/{key}/callback` (widget + landing) creates a `callback` booking with `source = widget`; phones are normalised to `+92…` by `App\Support\Phone`.
+- **Vapi sync never blocks signup:** `VapiService::trySync()` stores the reason in `bots.sync_error` (shown in Bot Studio with a Retry button). A voice made in demo mode (`sim_` id) is cloned on ElevenLabs automatically before the next sync.
+- **Preset voices** map to real ElevenLabs premade voice ids (`config/hamsukhan.php`). Urdu / mixed calls use ElevenLabs Scribe as transcriber (Deepgram has no Urdu).
+- **Safety rules** (`Bot::SAFETY_RULES`) are appended server-side to every prompt.
+- **Admin → ElevenLabs voices:** lists voices in the ElevenLabs account and assigns one to a customer (`provider = elevenlabs_import`, never deleted on ElevenLabs when the customer removes it).

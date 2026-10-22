@@ -11,6 +11,7 @@ type Props = {
     bookings: {
         id: number;
         type: 'booking' | 'order' | 'callback';
+        source: 'call' | 'widget';
         details: { label: string; value: string }[];
         sync: { status: 'pending' | 'delivered' | 'failed'; reference: string | null } | null;
         name: string;
@@ -100,6 +101,11 @@ export default function Bookings({ bookings, filter, counts }: Props) {
                                         <span className={'chip type-' + b.type} style={{ marginRight: 6 }}>
                                             {b.type[0].toUpperCase() + b.type.slice(1)}
                                         </span>
+                                        {b.source === 'widget' && (
+                                            <span className="chip" style={{ marginRight: 6 }} title="Left with the Request a callback form, not during a call">
+                                                Website form
+                                            </span>
+                                        )}
                                         {b.request}
                                         {b.details.length > 0 && (
                                             <div className="details">

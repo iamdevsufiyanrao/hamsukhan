@@ -23,6 +23,7 @@ class BookingController extends Controller
                 ->map(fn (Booking $b) => [
                     'id' => $b->id,
                     'type' => $b->type,
+                    'source' => $b->source,
                     'details' => collect($b->details ?? [])->map(fn ($v, $k) => [
                         'label' => collect($bot->capture_fields ?? [])->firstWhere('key', $k)['label'] ?? str($k)->headline()->toString(),
                         'value' => $v,

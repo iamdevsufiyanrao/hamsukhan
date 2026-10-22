@@ -1,6 +1,7 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { CSSProperties, MouseEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import Icon, { IconName, Logo } from '@/components/Icon';
+import LiveDemo from '@/components/LiveDemo';
 import { Sample, SampleCard, useSamplePlayer } from '@/components/SamplePlayer';
 import { useTheme } from '@/layouts/AppLayout';
 import type { SharedProps } from '@/types';
@@ -22,14 +23,14 @@ const DEMOS: Demo[] = [
         icon: 'user',
         business: 'Bloom Salon',
         lines: [
-            ['user', 'Hi, can I get a haircut and blow dry tomorrow?'],
-            ['ai', 'Of course! Tomorrow I have 2:30 pm or 5 pm with Hina. Which one suits you?'],
-            ['user', '5 pm, please.'],
-            ['ai', "Lovely, you're booked for 5 pm. Can I take your name and number?"],
-            ['user', "It's Ayesha, the number ends in 4412."],
-            ['ai', "Thanks Ayesha! You'll get a reminder before your visit. See you tomorrow."],
+            ['user', 'Kal evening mein haircut aur blow dry ka slot available hai?'],
+            ['ai', 'Ji bilkul! Kal Hina ke saath 5 baje ya 7 baje ka slot khali hai. Kaunsa time theek rahega?'],
+            ['user', '5 baje, please.'],
+            ['ai', 'Zabardast. Apna naam aur WhatsApp number bata dein, main request team ko bhej deti hoon.'],
+            ['user', 'Ayesha, 0300 123 4412.'],
+            ['ai', 'Shukriya Ayesha! Team WhatsApp par confirm kar degi. Haircut + blow dry Rs 3,500 hai.'],
         ],
-        captured: { kind: 'Booking', rows: [['Service', 'Haircut + blow dry'], ['When', 'Tomorrow, 5:00 pm'], ['Name', 'Ayesha'], ['Stylist', 'Hina']] },
+        captured: { kind: 'Booking request', rows: [['Service', 'Haircut + blow dry'], ['When', 'Tomorrow, 5:00 pm'], ['Name', 'Ayesha'], ['WhatsApp', '+92 300 1234412']] },
     },
     {
         id: 'restaurant',
@@ -42,9 +43,9 @@ const DEMOS: Demo[] = [
             ['user', 'Sure, one lemonade. Delivery please.'],
             ['ai', "Got it. What's the delivery address?"],
             ['user', 'House 12, Street 4, near the park.'],
-            ['ai', "Perfect. Your total is $18.50 and it'll be with you in about 35 minutes."],
+            ['ai', "Perfect. Your total is Rs 2,450 and the team will confirm on WhatsApp in a minute."],
         ],
-        captured: { kind: 'Order', rows: [['Items', '2 chicken burgers, large fries, lemonade'], ['Type', 'Delivery'], ['Address', 'House 12, Street 4'], ['Total', '$18.50']] },
+        captured: { kind: 'Order', rows: [['Items', '2 chicken burgers, large fries, lemonade'], ['Type', 'Delivery'], ['Address', 'House 12, Street 4'], ['Total', 'Rs 2,450']] },
     },
     {
         id: 'repair',
@@ -53,13 +54,13 @@ const DEMOS: Demo[] = [
         business: 'Smart Geeks',
         lines: [
             ['user', 'My phone screen is cracked. How much to fix it?'],
-            ['ai', 'Which phone is it? Most screen repairs take about an hour and start from $45.'],
+            ['ai', 'Which phone is it? Most screen repairs take about an hour and start from Rs 12,000.'],
             ['user', "It's an iPhone 13. Can I come in on Saturday?"],
             ['ai', 'Yes, I have 11 am or 3 pm on Saturday. Which works better?'],
             ['user', '11 am.'],
             ['ai', "Booked! Bring the phone at 11 and it'll be ready by lunch."],
         ],
-        captured: { kind: 'Booking', rows: [['Device', 'iPhone 13'], ['Issue', 'Cracked screen'], ['When', 'Saturday, 11:00 am'], ['Quote', 'From $45']] },
+        captured: { kind: 'Booking', rows: [['Device', 'iPhone 13'], ['Issue', 'Cracked screen'], ['When', 'Saturday, 11:00 am'], ['Quote', 'From Rs 12,000']] },
     },
     {
         id: 'clinic',
@@ -67,8 +68,8 @@ const DEMOS: Demo[] = [
         icon: 'shield',
         business: 'Smile Dental',
         lines: [
-            ['user', 'Hello, I need a dental check-up. Is the doctor free this week?'],
-            ['ai', 'Dr. Imran has Thursday at 10 am or Friday at 4 pm. Is this your first visit?'],
+            ['user', 'Assalam o Alaikum, clinic kis time band hoti hai? Check-up karwana hai.'],
+            ['ai', 'Walaikum Assalam! Clinic raat 9 baje band hoti hai. Dr. Imran ke paas Thursday 10 baje ya Friday 4 baje ka time hai.'],
             ['user', 'Yes, first time. Thursday is good.'],
             ['ai', 'Wonderful. Please arrive ten minutes early to fill in a short form. May I have your name?'],
             ['user', 'Bilal Ahmed.'],
@@ -79,18 +80,18 @@ const DEMOS: Demo[] = [
 ];
 
 const STEPS: { icon: IconName; title: string; text: string }[] = [
-    { icon: 'mic', title: 'Record your voice', text: 'Read anything for 30 seconds in a quiet room. We turn it into a natural voice clone that sounds like you.' },
-    { icon: 'sliders', title: 'Teach it your business', text: 'Pick a template, add your hours, prices and menus. Upload files and the bot answers from them.' },
+    { icon: 'sliders', title: 'Teach it your business', text: 'Pick a template, add your hours, services, prices and policies. The bot only quotes what you approve.' },
+    { icon: 'mic', title: 'Pick a voice', text: 'Start with a professional voice. Optionally clone your own voice, with a recorded consent check.' },
     { icon: 'code', title: 'Add one line to your site', text: 'Paste a single script tag. A call button appears and visitors can talk to your receptionist right away.' },
 ];
 
 const FEATURES: { icon: IconName; title: string; text: string }[] = [
-    { icon: 'wave', title: 'Your own cloned voice', text: 'Callers hear you, not a robot. Keep up to five voices and switch between them in one click.' },
-    { icon: 'calendar', title: 'Bookings and orders', text: 'The bot asks for exactly the details you need and writes them down as a clean booking or order.' },
-    { icon: 'play', title: 'Every call recorded', text: 'Listen back, read the full transcript and see a one-line summary of what each caller wanted.' },
+    { icon: 'wave', title: 'Urdu and English, together', text: 'Visitors talk the way they normally do: Urdu, English or a mix. Pakistani names, numbers and Rupees are understood.' },
+    { icon: 'calendar', title: 'Bookings and callbacks', text: 'The bot collects name, WhatsApp number, service and time, and hands you a clean booking or callback request.' },
+    { icon: 'shield', title: 'Safe, approved answers', text: 'It says it is an AI, only quotes your approved prices and hours, and offers a callback from your team when unsure.' },
     { icon: 'plug', title: 'Sends to your software', text: 'Signed webhooks, field mapping and a ready PHP package push each booking into your own system.' },
     { icon: 'book', title: 'Knows your answers', text: 'Menus, price lists, FAQs and policies. Upload them once and the bot uses them on every call.' },
-    { icon: 'wallet', title: 'Pay only for talk time', text: 'No monthly plan. Top up your wallet and pay per minute. You always see what each call cost.' },
+    { icon: 'wallet', title: 'Pay only for talk time', text: 'No monthly plan. Top up in Rupees by JazzCash, Easypaisa or bank. Failed connections are never billed.' },
 ];
 
 const TOPICS: [string, string][] = [
@@ -101,11 +102,20 @@ const TOPICS: [string, string][] = [
 ];
 
 const BUSINESSES = ['Salons', 'Restaurants', 'Clinics', 'Repair shops', 'Gyms', 'Real estate', 'Car service', 'Tutors', 'Hotels', 'Bakeries'];
-const LANGUAGES = ['English', 'Urdu', 'Arabic', 'Hindi', 'Spanish'];
+const LANGUAGES = ['English', 'Urdu', 'Urdu + English'];
 
-function money(n: number) {
-    return '$' + n.toFixed(n < 1 ? 2 : n % 1 === 0 ? 0 : 2);
+function rs(n: number) {
+    return 'Rs ' + Math.round(n).toLocaleString('en-PK');
 }
+
+const TRUST: { icon: IconName; title: string; text: string }[] = [
+    { icon: 'user', title: 'Always says it is an AI', text: 'Visitors are told before the call starts that they are speaking with an AI assistant.' },
+    { icon: 'mic', title: 'Asks before recording', text: 'Microphone and recording consent are asked first. Visitors can request a callback instead.' },
+    { icon: 'phone', title: 'Human fallback', text: 'Unsure answers, complaints or a request for a person become a callback request for your team.' },
+    { icon: 'trash', title: 'You control the data', text: 'Delete calls and voices any time. Public demo calls are removed within 7 days.' },
+    { icon: 'ban', title: 'Not used for training', text: 'Your business and caller data is not used to train AI models without your written agreement.' },
+    { icon: 'shield', title: 'Never asks for card details', text: 'The bot never takes card numbers, PINs, OTP codes or CNIC numbers in a conversation.' },
+];
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -393,9 +403,10 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
     const progress = useRef<HTMLDivElement>(null);
     const art = useRef<HTMLDivElement>(null);
     const name = site.name || 'Hamsukhan';
-    const rate = config.ratePerMinute;
+    const rate = config.ratePerMinutePkr;
     const startHref = auth ? '/dashboard' : site.allowSignups ? '/register' : '/login';
-    const startLabel = auth ? 'Open dashboard' : site.allowSignups ? 'Get started' : 'Log in';
+    const startLabel = auth ? 'Open dashboard' : site.allowSignups ? 'Start free pilot' : 'Log in';
+    const wa = site.whatsapp ? `https://wa.me/${site.whatsapp.replace(/\D/g, '').replace(/^0/, '92')}` : null;
     useReveal();
 
     useEffect(() => {
@@ -419,12 +430,13 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
     const untilt = () => art.current && (art.current.style.transform = '');
 
     const faqs: [string, string][] = [
-        ['Do I need a phone number?', 'No. Calls come from a button on your own website. Visitors tap it and talk to your receptionist straight from their browser, on phone or laptop.'],
-        ['How much of my voice do you need?', 'About 30 seconds of clear speech. Read naturally in a quiet room and talk about your business, your hours, anything at all. You confirm that the voice is yours before cloning.'],
-        ['Which languages can it speak?', `Your receptionist can talk in ${LANGUAGES.slice(0, -1).join(', ')} and ${LANGUAGES[LANGUAGES.length - 1]}. You choose the language for your bot in the studio.`],
+        ['Does it answer my phone line?', 'Not yet. Today it is a voice conversation on your website: visitors tap a button and talk from their browser, no app needed. Pakistani phone-number and call-forwarding support is planned for later.'],
+        ['Which languages can it speak?', 'Urdu, English and a natural mix of both (code-switching), including Roman Urdu style phrasing. Other languages are not offered until they pass the same quality checks.'],
+        ['What if the AI does not know an answer?', 'It only quotes the prices, hours and policies you approved. When it is unsure it says so and takes a callback request with the caller\u2019s name and WhatsApp number, so your team can follow up.'],
+        ['Do I have to clone my voice?', 'No. Every bot starts with a professional voice. Voice cloning is optional and only for your own voice, or one you have clear permission to use; we record that consent.'],
         ['Can bookings go into my own software?', 'Yes. Every booking or order can be delivered to your system with a signed webhook, mapped to your own form fields. If your server is down we retry automatically. There is also a ready package for Laravel and plain PHP.'],
-        ['How does billing work?', `There is no monthly plan. You top up your wallet and every call is charged at ${money(rate)} per minute of talk time. Top-ups start from ${money(config.minTopUp)} and you can see the cost of each call in your call log.`],
-        ['What if my balance runs low?', 'You get a low balance warning in your dashboard well before it runs out. A call only starts when there is enough balance to cover it, so you never end up owing money.'],
+        ['How does billing work?', `There is no monthly plan. You top up your wallet in Rupees and calls are charged at about ${rs(rate)} per minute of talk time, billed by the second. Billable time starts when the call connects and ends when it ends. Failed connections and the website demo are never charged. Top-ups start from about ${rs(config.minTopUpPkr)}. Payment fees and taxes, if any, are shown on your top-up receipt.`],
+        ['What if my balance runs low?', 'You get a low balance warning in your dashboard well before it runs out. A call only starts when the balance covers it, and its maximum length is capped to what you can afford, so you never end up owing money.'],
     ];
 
     const go = (id: string) => {
@@ -432,7 +444,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
         document.getElementById(id)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
     };
 
-    const headline = ['Your', 'voice', 'answers'];
+    const headline = ['Turn', 'website', 'visitors', 'into'];
     const NAV: [string, string][] = [
         ['how', 'How it works'],
         ['demo', 'Demo'],
@@ -440,12 +452,11 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
         ['features', 'Features'],
         ['pricing', 'Pricing'],
         ['faq', 'FAQ'],
-        ['contact', 'Contact'],
     ];
 
     return (
         <div className="lp">
-            <Head title="AI receptionist in your own voice">
+            <Head title="AI voice receptionist for your website">
                 <link rel="stylesheet" href="https://fonts.bunny.net/css?family=bricolage-grotesque:500,600,700,800|instrument-serif:400i&display=swap" />
             </Head>
             <div className="lp-progress" ref={progress} aria-hidden="true" />
@@ -461,6 +472,13 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                 {label}
                             </button>
                         ))}
+                        {wa ? (
+                            <a href={wa} target="_blank" rel="noopener">
+                                WhatsApp Support
+                            </a>
+                        ) : (
+                            <button onClick={() => go('contact')}>Contact</button>
+                        )}
                         <div className="lp-menu-extra">
                             <button onClick={toggle}>
                                 <Icon name={dark ? 'sun' : 'moon'} className="i i-sm" />
@@ -478,13 +496,16 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                             <Icon name={dark ? 'sun' : 'moon'} />
                         </button>
                         {!auth && (
-                            <Link href="/login" className="btn btn-ghost lp-hide-sm">
+                            <Link href="/login" className="lp-login lp-hide-sm">
                                 Log in
                             </Link>
                         )}
-                        <Link href={startHref} className="btn btn-primary lp-shine">
+                        <Link href={startHref} className="btn btn-ghost lp-hide-sm">
                             {startLabel}
                         </Link>
+                        <button className="btn btn-primary lp-shine" onClick={() => go('demo')}>
+                            Try Live Demo
+                        </button>
                         <button className="icon-btn lp-burger" onClick={() => setMenu(!menu)} aria-label="Menu" aria-expanded={menu}>
                             <Icon name={menu ? 'x' : 'menu'} />
                         </button>
@@ -502,7 +523,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                     <div className="lp-hero-copy">
                         <span className="lp-eyebrow lp-enter" style={{ '--d': '0ms' } as CSSProperties}>
                             <span className="lp-live" />
-                            AI receptionist for your website
+                            AI voice receptionist · Urdu + English
                         </span>
                         <h1>
                             {headline.map((w, i) => (
@@ -511,31 +532,31 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                 </span>
                             ))}
                             <span className="lp-word" style={{ '--d': '300ms' } as CSSProperties}>
-                                <em className="lp-serif lp-grad">every call.</em>{' '}
+                                <em className="lp-serif lp-grad">bookings</em>{' '}
                             </span>
-                            {['Even', 'when', "you're", 'busy.'].map((w, i) => (
+                            {['with', 'an', 'AI', 'voice', 'receptionist.'].map((w, i) => (
                                 <span key={w} className="lp-word lp-soft" style={{ '--d': `${380 + i * 60}ms` } as CSSProperties}>
                                     {w}{' '}
                                 </span>
                             ))}
                         </h1>
                         <p className="lp-lead lp-enter" style={{ '--d': '520ms' } as CSSProperties}>
-                            {name} picks up calls on your website in your own cloned voice. It answers questions, takes bookings and orders, records every conversation and sends the details straight to your software.
+                            Let customers speak from your website in Urdu or English. {name} answers approved questions, qualifies the visitor and sends you a clean booking or callback request.
                         </p>
                         <div className="lp-cta lp-enter" style={{ '--d': '620ms' } as CSSProperties}>
-                            <Link href={startHref} className="btn btn-primary btn-lg lp-shine">
-                                {auth ? 'Open dashboard' : 'Create your receptionist'}
+                            <button className="btn btn-primary btn-lg lp-shine" onClick={() => go('demo')}>
+                                <span className="lp-play">
+                                    <Icon name="mic" className="i i-sm" />
+                                </span>
+                                Try a Live Urdu Demo
+                            </button>
+                            <Link href={startHref} className="btn btn-ghost btn-lg">
+                                {auth ? 'Open dashboard' : 'Start a 30-Day Pilot'}
                                 <Icon name="chev" className="i i-sm lp-arrow" />
                             </Link>
-                            <button className="btn btn-ghost btn-lg" onClick={() => go('demo')}>
-                                <span className="lp-play">
-                                    <Icon name="play" className="i i-sm" />
-                                </span>
-                                Hear a sample call
-                            </button>
                         </div>
                         <ul className="lp-ticks lp-enter" style={{ '--d': '720ms' } as CSSProperties}>
-                            {['No monthly fee', 'Live in 10 minutes', 'No phone line needed'].map((t) => (
+                            {['Website voice conversation', 'No app required', 'Phone-line integration coming later'].map((t) => (
                                 <li key={t}>
                                     <Icon name="check" className="i i-sm" />
                                     {t}
@@ -591,7 +612,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                             <div className="lp-callcard">
                                 <div className="lp-callcard-h">
                                     <span className="lp-live" />
-                                    Answering in <b>your voice</b>
+                                    Talking in <b>Urdu + English</b>
                                     <span className="mono">00:42</span>
                                 </div>
                                 <div className="lp-eq">
@@ -599,7 +620,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                         <span key={i} style={{ height: `${28 + ((i * 41) % 72)}%`, animationDelay: `${(i % 8) * 0.11}s` }} />
                                     ))}
                                 </div>
-                                <p>"Sure! I have 11 am or 3 pm on Saturday. Which one works for you?"</p>
+                                <p>"Ji, Saturday ko 11 baje ya 3 baje ka slot khali hai. Kaunsa theek rahega?"</p>
                             </div>
 
                             <div className="lp-toast">
@@ -607,8 +628,8 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                     <Icon name="calendar" className="i i-sm" />
                                 </span>
                                 <span>
-                                    <b>New booking</b>
-                                    <small>Screen repair · Sat 11:00 am</small>
+                                    <b>New booking request</b>
+                                    <small>Haircut · Sat 11:00 am · WhatsApp sent</small>
                                 </span>
                             </div>
                         </div>
@@ -639,25 +660,25 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                         <CountUp to={24} />
                         /7
                     </strong>
-                    <span>Never misses a call, even at night or on holidays</span>
+                    <span>Answers website visitors, even at night and on holidays</span>
                 </Reveal>
                 <Reveal delay={80}>
                     <strong>
-                        <CountUp to={30} suffix=" sec" />
+                        <CountUp to={90} suffix=" sec" />
                     </strong>
-                    <span>Of your voice is all it takes to clone it</span>
+                    <span>Free live demo, no sign-up needed</span>
                 </Reveal>
                 <Reveal delay={160}>
                     <strong>
-                        <CountUp to={rate} decimals={2} prefix="$" />
+                        <CountUp to={rate} prefix="Rs " />
                     </strong>
-                    <span>Per minute of talk time, nothing else</span>
+                    <span>About per minute of talk time, billed by the second</span>
                 </Reveal>
                 <Reveal delay={240}>
                     <strong>
                         <CountUp to={LANGUAGES.length} />
                     </strong>
-                    <span>Languages, including English, Urdu and Arabic</span>
+                    <span>Ways to talk: Urdu, English, or both mixed</span>
                 </Reveal>
             </section>
 
@@ -693,11 +714,18 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                 <div className="lp-grid-bg dark" aria-hidden="true" />
                 <div className="lp-wrap">
                     <Reveal className="lp-head">
-                        <span className="lp-kicker">See it in action</span>
+                        <span className="lp-kicker">Live demo</span>
                         <h2>
-                            A real conversation, then <em className="lp-serif">a clean booking.</em>
+                            Talk to it now, <em className="lp-serif">in Urdu or English.</em>
                         </h2>
-                        <p>Pick a business and watch the receptionist handle a call from hello to confirmed.</p>
+                        <p>A real AI voice call in your browser. Free, up to 90 seconds, no sign-up.</p>
+                    </Reveal>
+                    <Reveal delay={60}>
+                        <LiveDemo demoBotKey={site.demoBotKey} />
+                    </Reveal>
+                    <Reveal className="lp-head" delay={80}>
+                        <h3 style={{ marginTop: 48 }}>Example conversations</h3>
+                        <p>How the receptionist handles a call from hello to a clean booking.</p>
                     </Reveal>
                     <Reveal delay={100}>
                         <div className="lp-tabs" role="tablist">
@@ -780,6 +808,30 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                 </div>
             </section>
 
+            {/* ---------- trust ---------- */}
+            <section id="trust" className="lp-section lp-alt">
+                <div className="lp-wrap">
+                    <Reveal className="lp-head">
+                        <span className="lp-kicker">Trust and safety</span>
+                        <h2>
+                            Honest with callers. <em className="lp-serif">Careful with data.</em>
+                        </h2>
+                        <p>Works in current Chrome, Edge and Safari on phone and laptop. If the microphone is blocked, visitors can request a callback instead.</p>
+                    </Reveal>
+                    <div className="lp-features">
+                        {TRUST.map((f, i) => (
+                            <Reveal key={f.title} className="lp-feature" delay={(i % 3) * 90}>
+                                <span className="lp-feature-ic">
+                                    <Icon name={f.icon} />
+                                </span>
+                                <h3>{f.title}</h3>
+                                <p>{f.text}</p>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* ---------- pricing ---------- */}
             <section id="pricing" className="lp-section">
                 <div className="lp-wrap">
@@ -788,20 +840,20 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                         <h2>
                             Simple. <em className="lp-serif">Pay as you talk.</em>
                         </h2>
-                        <p>No plans, no contracts, no setup fee. You only pay for the minutes your receptionist spends on calls.</p>
+                        <p>No plans, no contracts, no setup fee. Top up in Rupees and pay only for the minutes your receptionist spends talking.</p>
                     </Reveal>
                     <div className="lp-pricing">
                         <Reveal className="lp-price-card">
                             <div className="lp-price-top">
                                 <span className="lp-chip">Pay per minute</span>
                                 <div className="lp-price">
-                                    <strong>{money(rate)}</strong>
+                                    <strong>{rs(rate)}</strong>
                                     <span>/ minute</span>
                                 </div>
-                                <p>Top up from {money(config.minTopUp)}. Your wallet is charged only for talk time.</p>
+                                <p>Top up from {rs(config.minTopUpPkr)} by JazzCash, Easypaisa or bank transfer.</p>
                             </div>
                             <ul className="lp-list">
-                                {['Your cloned voice, up to 5 voices', 'Unlimited bookings and orders', 'Recordings and full transcripts', 'Knowledge files and quick facts', 'Webhooks and software connectors', 'Website widget with your branding'].map((x) => (
+                                {['Billed by the second from the moment the call connects', 'Never billed: failed connections, silence before connecting, the website demo', 'A call only starts if your balance covers it; its length is capped to your balance', 'Low-balance warning in your dashboard', 'Professional voice included, own voice clone optional', 'Recordings, transcripts, bookings and callbacks'].map((x) => (
                                     <li key={x}>
                                         <Icon name="check" className="i i-sm" />
                                         {x}
@@ -809,13 +861,13 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                 ))}
                             </ul>
                             <Link href={startHref} className="btn btn-primary btn-lg lp-full lp-shine">
-                                {auth ? 'Open dashboard' : 'Start now'}
+                                {auth ? 'Open dashboard' : 'Start a 30-day pilot'}
                             </Link>
                         </Reveal>
 
                         <Reveal className="lp-calc" delay={120}>
                             <h3>Estimate your monthly cost</h3>
-                            <p>Drag to the number of call minutes you expect in a month.</p>
+                            <p>Drag to the number of conversation minutes you expect in a month. Estimates only, payment fees and taxes are not included.</p>
                             <div className="lp-calc-val">
                                 <span className="num">{minutes.toLocaleString()}</span> minutes
                             </div>
@@ -828,13 +880,13 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                 </div>
                                 <div>
                                     <small>You pay</small>
-                                    <strong className="num">${(minutes * rate).toFixed(2)}</strong>
+                                    <strong className="num">{rs(minutes * rate)}</strong>
                                     <span>per month</span>
                                 </div>
                                 <div>
-                                    <small>Per day</small>
-                                    <strong className="num">${((minutes * rate) / 30).toFixed(2)}</strong>
-                                    <span>for a 24/7 receptionist</span>
+                                    <small>Per booking</small>
+                                    <strong className="num">{rs((minutes * rate) / Math.max(1, Math.round(minutes / 2 / 4)))}</strong>
+                                    <span>if 1 in 4 calls books</span>
                                 </div>
                             </div>
                         </Reveal>
@@ -889,12 +941,12 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                         ))}
                     </div>
                     <h2>
-                        Stop missing calls. <em className="lp-serif">Start booking more.</em>
+                        Turn visitors into <em className="lp-serif">bookings.</em>
                     </h2>
-                    <p>Give your website a receptionist that sounds like you and never takes a day off.</p>
+                    <p>Give your website a receptionist that talks in Urdu and English and never takes a day off.</p>
                     <div className="lp-cta center">
                         <Link href={startHref} className="btn btn-primary btn-lg lp-shine">
-                            {auth ? 'Open dashboard' : 'Create your receptionist'}
+                            {auth ? 'Open dashboard' : 'Start a 30-Day Pilot'}
                             <Icon name="chev" className="i i-sm lp-arrow" />
                         </Link>
                         {!auth && (
@@ -906,11 +958,16 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                 </Reveal>
             </section>
 
+            <button className="lp-sticky-cta" onClick={() => go('demo')}>
+                <Icon name="mic" className="i i-sm" />
+                Try Demo
+            </button>
+
             <footer className="lp-foot">
                 <div className="lp-wrap lp-foot-in">
                     <div className="lp-foot-brand">
                         <Logo />
-                        <p>An AI receptionist that answers your website calls in your own voice.</p>
+                        <p>An AI voice receptionist that turns website visitors into bookings, in Urdu and English.</p>
                     </div>
                     <div className="lp-foot-col">
                         <b>Product</b>
@@ -922,8 +979,13 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                         <b>Company</b>
                         <button onClick={() => go('faq')}>FAQ</button>
                         <button onClick={() => go('contact')}>Contact us</button>
-                        {site.privacyUrl && <a href={site.privacyUrl}>Privacy</a>}
-                        {site.termsUrl && <a href={site.termsUrl}>Terms</a>}
+                        {wa && (
+                            <a href={wa} target="_blank" rel="noopener">
+                                WhatsApp support
+                            </a>
+                        )}
+                        <a href={site.privacyUrl ?? '/privacy'}>Privacy</a>
+                        <a href={site.termsUrl ?? '/terms'}>Terms</a>
                     </div>
                     <div className="lp-foot-col">
                         <b>Account</b>

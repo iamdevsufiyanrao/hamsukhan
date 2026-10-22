@@ -123,15 +123,16 @@ function Card({ title, desc, children, form, save }: { title: string; desc: stri
 
 /* ---------- tabs ---------- */
 function SiteTab({ values }: { values: Values }) {
-    const { form, save } = useGroupForm('site', ['site_name', 'support_email', 'support_phone', 'allow_signups', 'announcement', 'terms_url', 'privacy_url'], values);
+    const { form, save } = useGroupForm('site', ['site_name', 'support_email', 'support_phone', 'whatsapp_number', 'demo_bot_key', 'allow_signups', 'announcement', 'terms_url', 'privacy_url'], values);
     return (
         <Card title="Site" desc="Name, contact details and sign-up rules for the whole platform." form={form} save={save}>
             <Text form={form} k="site_name" label="Site name" hint="Shown in browser tabs and emails." />
             <Text form={form} k="support_email" label="Support email" type="email" />
             <Text form={form} k="support_phone" label="Support phone / WhatsApp" />
-            <Text form={form} k="terms_url" label="Terms URL" placeholder="https://…" />
-            <Text form={form} k="privacy_url" label="Privacy policy URL" placeholder="https://…" />
-            <div />
+            <Text form={form} k="whatsapp_number" label="WhatsApp support number" placeholder="+92 300 1234567" hint="Shows a WhatsApp Support button on the landing page." />
+            <Text form={form} k="demo_bot_key" label="Live demo bot (public key)" placeholder="Bot public key from Bot Studio → Embed code" hint="The landing-page demo talks to this bot. Demo calls are never billed and last at most 90 seconds." />
+            <Text form={form} k="terms_url" label="External Terms URL (optional)" placeholder="https://…" hint="Leave empty to use the built-in /terms page." />
+            <Text form={form} k="privacy_url" label="External Privacy URL (optional)" placeholder="https://…" hint="Leave empty to use the built-in /privacy page." />
             <Text form={form} k="announcement" label="Announcement banner" type="textarea" placeholder="e.g. Scheduled maintenance on Sunday 2–3am" hint="Shown at the top of every customer's dashboard. Leave empty to hide." wide />
             <Toggle form={form} k="allow_signups" label="Allow new sign-ups" hint="Turn off to stop new accounts (existing customers can still log in)." />
         </Card>
@@ -269,12 +270,34 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
                     </button>
                 </div>
                 <div className="card-b grid-2">
-                    {SecretField({ k: 'elevenlabs_api_key', label: 'API key', hint: 'Also add this key in Vapi → Provider credentials, so cloned voices work in calls.' })}
+                    {SecretField({ k: 'elevenlabs_api_key', label: 'API key', hint: 'After saving, press "Link ElevenLabs inside Vapi" below so cloned voices speak on calls.' })}
                     <div className="field">
                         <label htmlFor="elevenlabs_model">Voice model</label>
                         <input id="elevenlabs_model" className="input mono" value={form.data.elevenlabs_model} onChange={(e) => form.setData('elevenlabs_model', e.target.value)} />
-                        <span className="hint">eleven_multilingual_v2 supports Urdu.</span>
+                        <span className="hint">eleven_multilingual_v2 by default. For Urdu, compare eleven_flash_v2_5 / eleven_v3 on a test call before switching.</span>
                     </div>
+                </div>
+            </div>
+            <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-h">
+                    <div>
+                        <h3>After adding or changing keys</h3>
+                        <p>Run these once. Each one tells you exactly what went wrong if it fails.</p>
+                    </div>
+                </div>
+                <div className="card-b" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button className="btn btn-ghost" disabled={!values.vapi_private_key?.set || !values.elevenlabs_api_key?.set} onClick={() => router.post('/admin/settings/link-elevenlabs', {}, { preserveScroll: true })}>
+                        <Icon name="plug" className="i i-sm" />
+                        1. Link ElevenLabs inside Vapi
+                    </button>
+                    <button className="btn btn-ghost" disabled={!values.vapi_private_key?.set} onClick={() => confirm('Push every bot to Vapi again? This can take a minute.') && router.post('/admin/settings/resync-bots', {}, { preserveScroll: true })}>
+                        <Icon name="refresh" className="i i-sm" />
+                        2. Re-sync all bots with Vapi
+                    </button>
+                    <Link className="btn btn-ghost" href="/admin/provider-voices">
+                        <Icon name="wave" className="i i-sm" />
+                        3. Voices in the ElevenLabs account
+                    </Link>
                 </div>
             </div>
             <div className="card" style={{ marginBottom: 16 }}>

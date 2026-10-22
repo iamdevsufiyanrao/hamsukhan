@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminAction;
+use App\Models\Bot;
+use App\Services\VapiService;
 use App\Models\Integration;
 use App\Models\IntegrationDelivery;
 use App\Models\Setting;
@@ -108,6 +110,31 @@ class SettingsController extends Controller
         };
 
         return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    /** Puts the ElevenLabs key into Vapi as a provider credential, so cloned voices speak on calls. */
+    public function linkElevenLabs(Request $request, VapiService $vapi): RedirectResponse
+    {
+        $result = $vapi->linkElevenLabs();
+        AdminAction::record($request->user(), null, 'link_elevenlabs', ['ok' => $result['ok']]);
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    /** After keys are added or changed: push every bot to Vapi again (bots made in demo mode get a real assistant). */
+    public function resyncBots(Request $request, VapiService $vapi): RedirectResponse
+    {
+        abort_unless($vapi->enabled(), 409, 'Add the Vapi private key first.');
+        @set_time_limit(300);
+
+        $ok = 0;
+        $failed = [];
+        Bot::with('voice', 'user:id,email')->whereHas('user', fn ($q) => $q->whereNull('suspended_at'))->each(function (Bot $bot) use ($vapi, &$ok, &$failed) {
+            ($error = $vapi->trySync($bot)) ? $failed[] = ($bot->user?->email ?? "bot {$bot->id}").': '.$error : $ok++;
+        });
+        AdminAction::record($request->user(), null, 'resync_bots', ['ok' => $ok, 'failed' => count($failed)]);
+
+        return back()->with($failed ? 'error' : 'success', "{$ok} bots synced with Vapi".($failed ? ', '.count($failed).' failed. First: '.$failed[0] : ''));
     }
 
     public function toggleConnector(Request $request, Integration $integration): RedirectResponse

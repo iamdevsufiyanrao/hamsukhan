@@ -50,8 +50,12 @@ export default function Register() {
                     <input type="checkbox" checked={form.data.terms} onChange={(e) => form.setData('terms', e.target.checked)} />
                     <span>
                         I agree to the{' '}
-                        <a href={site.termsUrl ?? site.privacyUrl ?? '#'} target="_blank" rel="noreferrer" className="link">
-                            Privacy Policy & Terms
+                        <a href={site.termsUrl ?? '/terms'} target="_blank" rel="noreferrer" className="link">
+                            Terms of Service
+                        </a>{' '}
+                        and{' '}
+                        <a href={site.privacyUrl ?? '/privacy'} target="_blank" rel="noreferrer" className="link">
+                            Privacy Policy
                         </a>
                     </span>
                 </label>

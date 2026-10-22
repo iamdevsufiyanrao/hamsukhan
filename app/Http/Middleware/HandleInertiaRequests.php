@@ -51,14 +51,20 @@ class HandleInertiaRequests extends Middleware
                 'name' => config('hamsukhan.site.name'),
                 'announcement' => config('hamsukhan.site.announcement'),
                 'allowSignups' => (bool) config('hamsukhan.site.allow_signups'),
-                'termsUrl' => config('hamsukhan.site.terms_url'),
-                'privacyUrl' => config('hamsukhan.site.privacy_url'),
+                'termsUrl' => '/terms', // /terms redirects to the admin's external URL when one is set
+                'privacyUrl' => '/privacy',
                 'supportEmail' => config('hamsukhan.site.support_email'),
                 'supportPhone' => config('hamsukhan.site.support_phone'),
+                'whatsapp' => config('hamsukhan.site.whatsapp'),
+                // Public bot key of the landing-page demo bot (public anyway, it is in every embed code).
+                'demoBotKey' => filled(config('hamsukhan.vapi.private_key')) ? config('hamsukhan.demo.bot_key') : null,
             ],
             'config' => [
                 'ratePerMinute' => config('hamsukhan.rate_per_minute'),
                 'minTopUp' => config('hamsukhan.min_topup_usd'),
+                // Rounded PKR prices for public pages (the exchange rate itself stays private).
+                'ratePerMinutePkr' => (int) round(config('hamsukhan.rate_per_minute') * config('hamsukhan.pkr_per_usd')),
+                'minTopUpPkr' => (int) round(config('hamsukhan.min_topup_usd') * config('hamsukhan.pkr_per_usd')),
                 // Payment details are only for signed-in users; public pages never carry them.
                 ...($user ? [
                     'pkrPerUsd' => config('hamsukhan.pkr_per_usd'),
