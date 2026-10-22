@@ -12,7 +12,7 @@ class Bot extends Model
     protected $fillable = [
         'business_name', 'website', 'greeting', 'end_message', 'language', 'prompt', 'quick_facts', 'capture_fields',
         'max_call_minutes', 'voice_id', 'preset_voice', 'widget', 'vapi_assistant_id', 'synced_at',
-        'is_active', 'installed_at', 'allowed_domains', 'business_hours', 'holidays', 'live_booking', 'slot_minutes',
+        'is_active', 'installed_at', 'allowed_domains', 'business_hours', 'holidays', 'live_booking', 'slot_minutes', 'transfer_number', 'vapi_phone_number_id', 'phone_number', 'reminder_hours',
     ];
 
     protected function casts(): array
@@ -149,6 +149,7 @@ class Bot extends Model
             .($facts !== '' ? "\n\nFacts you must know:\n".$facts : '')
             .($hours !== '' ? "\n\n".$hours : '')
             .($this->live_booking && $this->business_hours ? "\n\n".self::LIVE_BOOKING_RULES : '')
+            .($this->transfer_number ? "\n\nOn a phone call, if the caller asks for a person, is upset, or you cannot help after two tries, use the transferCall tool to connect them to the team. On a website call (no phone number) take a callback request instead." : '')
             ."\n\n".self::SAFETY_RULES
             ."\n\n".'Today is {{"now" | date: "%A %d %B %Y, %I:%M %p", "Asia/Karachi"}} (Pakistan time).'; // Vapi fills this in per call
     }

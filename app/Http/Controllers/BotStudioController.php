@@ -47,6 +47,10 @@ class BotStudioController extends Controller
                 'liveBooking' => $bot->live_booking,
                 'slotMinutes' => $bot->slot_minutes,
                 'calendarConnected' => (bool) $user->googleCalendar,
+                'transferNumber' => $bot->transfer_number,
+                'reminderHours' => $bot->reminder_hours,
+                'phoneNumber' => $bot->phone_number,
+                'outboundAvailable' => app(\App\Services\OutboundService::class)->available($bot),
                 'live' => $this->vapi->isLive($bot),
             ],
             'providers' => ['vapi' => $this->vapi->enabled(), 'elevenlabs' => app(\App\Services\ElevenLabsService::class)->enabled()],
@@ -190,6 +194,24 @@ class BotStudioController extends Controller
             'live_booking' => $request->boolean('liveBooking'),
             'slot_minutes' => $data['slotMinutes'] ?? 30,
         ], 'Opening hours saved, your bot knows them now');
+    }
+
+    /** Transfer-to-a-person number and appointment reminder calls. */
+    public function updatePhone(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'transferNumber' => ['nullable', 'string', 'max:30'],
+            'reminderHours' => ['nullable', 'integer', Rule::in([2, 4, 24])],
+        ]);
+        $transfer = null;
+        if (filled($data['transferNumber'] ?? null)) {
+            $transfer = \App\Support\Phone::normalize($data['transferNumber']);
+            if (! $transfer) {
+                return back()->withErrors(['transferNumber' => 'Enter a valid number, e.g. 0300 1234567.']);
+            }
+        }
+
+        return $this->save($request->user()->bot, ['transfer_number' => $transfer, 'reminder_hours' => $data['reminderHours'] ?? null], 'Phone settings saved');
     }
 
     /** Websites allowed to show the widget (empty = any). */

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Services\AvailabilityService;
+use App\Services\OutboundService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -36,11 +37,13 @@ class BookingController extends Controller
                     'when' => $b->preferred_time,
                     'startsAt' => $b->starts_at?->toIso8601String(),
                     'inCalendar' => (bool) $b->google_event_id,
+                    'aiCalledAt' => $b->ai_callback_at?->toIso8601String(),
                     'status' => $b->status,
                     'callId' => $b->call_id,
                     'createdAt' => $b->created_at->toIso8601String(),
                 ]),
             'filter' => $status,
+            'outboundAvailable' => app(OutboundService::class)->available($bot),
             'counts' => [
                 'new' => (int) ($counts['new'] ?? 0),
                 'confirmed' => (int) ($counts['confirmed'] ?? 0),
@@ -48,6 +51,19 @@ class BookingController extends Controller
                 'month' => $bot->bookings()->where('created_at', '>=', now($request->user()->timezone)->startOfMonth()->utc())->count(),
             ],
         ]);
+    }
+
+    /** "Call back with AI": the bot phones the customer now. */
+    public function aiCallback(Request $request, Booking $booking, OutboundService $outbound): RedirectResponse
+    {
+        abort_unless($booking->bot_id === $request->user()->bot->id, 404);
+        try {
+            $outbound->callback($booking->setRelation('bot', $request->user()->bot));
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Your AI assistant is calling {$booking->customer_name} now. The call will show in Call Logs.");
     }
 
     public function update(Request $request, Booking $booking): RedirectResponse

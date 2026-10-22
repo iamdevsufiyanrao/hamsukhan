@@ -17,6 +17,7 @@ export default function CallRow({ call, full, onOpen }: { call: CallRowData; ful
             </td>
             <td>
                 <span className="tag">{call.tag}</span> {call.isTest && <span className="chip test">Test</span>}
+                {call.direction && call.direction !== 'web' && <span className="chip">{call.direction === 'inbound' ? 'Phone call' : 'AI called out'}</span>}
             </td>
             {full && (
                 <>

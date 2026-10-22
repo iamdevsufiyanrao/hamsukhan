@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\KnowledgeFileController;
 use App\Http\Controllers\LegalController;
+use App\Http\Controllers\Admin\PhoneNumberController;
 use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TestCallController;
@@ -90,6 +91,8 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
         Route::post('/settings/link-elevenlabs', [AdminSettingsController::class, 'linkElevenLabs'])->middleware('throttle:10,1')->name('settings.link-elevenlabs');
         Route::post('/settings/resync-bots', [AdminSettingsController::class, 'resyncBots'])->middleware('throttle:5,1')->name('settings.resync');
 
+        Route::get('/phone-numbers', [PhoneNumberController::class, 'index'])->name('phone-numbers');
+        Route::post('/phone-numbers/assign', [PhoneNumberController::class, 'assign'])->name('phone-numbers.assign');
         Route::get('/provider-voices', [ProviderVoiceController::class, 'index'])->name('provider-voices');
         Route::post('/provider-voices/assign', [ProviderVoiceController::class, 'assign'])->name('provider-voices.assign');
         Route::post('/settings/connectors/{integration}/toggle', [AdminSettingsController::class, 'toggleConnector'])->name('settings.connector');
@@ -124,6 +127,7 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::patch('/bot-studio/widget', [BotStudioController::class, 'updateWidget'])->name('bot.widget');
     Route::patch('/bot-studio/hours', [BotStudioController::class, 'updateHours'])->name('bot.hours');
     Route::patch('/bot-studio/domains', [BotStudioController::class, 'updateDomains'])->name('bot.domains');
+    Route::patch('/bot-studio/phone', [BotStudioController::class, 'updatePhone'])->name('bot.phone');
     Route::post('/bot-studio/sync',[BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
 
     Route::post('/voices', [VoiceController::class, 'store'])->middleware('throttle:10,1')->name('voices.store');
@@ -142,6 +146,7 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings');
     Route::get('/insights', InsightsController::class)->name('insights');
     Route::patch('/bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
+    Route::post('/bookings/{booking}/ai-callback', [BookingController::class, 'aiCallback'])->middleware('throttle:10,1')->name('bookings.ai-callback');
 
     Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations');
     Route::post('/integrations/google/connect', [GoogleCalendarController::class, 'connect'])->name('google.connect');

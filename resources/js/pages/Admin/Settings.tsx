@@ -253,7 +253,7 @@ function MailTab({ values }: { values: Values }) {
 
 function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: string }) {
     const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key', 'whatsapp_token', 'google_client_secret'];
-    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang', 'google_client_id'];
+    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang', 'google_client_id', 'vapi_phone_number_id'];
     const googleRedirect = `${window.location.origin}/integrations/google/callback`;
     const [waTo, setWaTo] = useState('');
     const form = useForm<Values>({ ...Object.fromEntries(secretKeys.map((k) => [k, ''])), ...Object.fromEntries(plainKeys.map((k) => [k, values[k] ?? ''])) });
@@ -307,6 +307,11 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
                         <span className="hint">Sent to browsers to start web calls. Restrict it to your domains in Vapi.</span>
                     </div>
                     {SecretField({ k: 'vapi_webhook_secret', label: 'Webhook secret', hint: 'Any long random string, required in production.' })}
+                    <div className="field">
+                        <label htmlFor="vapi_phone_number_id">Default outbound phone number ID</label>
+                        <input id="vapi_phone_number_id" className="input mono" placeholder="from Vapi → Phone Numbers" value={form.data.vapi_phone_number_id} onChange={(e) => form.setData('vapi_phone_number_id', e.target.value)} />
+                        <span className="hint">Used for AI callbacks and reminders of customers without their own number. Assign numbers to customers under Phone numbers.</span>
+                    </div>
                     <div className="field">
                         <label htmlFor="vapi_model">LLM model</label>
                         <input id="vapi_model" className="input mono" value={form.data.vapi_model} onChange={(e) => form.setData('vapi_model', e.target.value)} />

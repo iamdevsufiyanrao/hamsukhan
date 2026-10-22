@@ -14,6 +14,7 @@ type Props = {
         source: 'call' | 'widget';
         startsAt: string | null;
         inCalendar: boolean;
+        aiCalledAt: string | null;
         details: { label: string; value: string }[];
         sync: { status: 'pending' | 'delivered' | 'failed'; reference: string | null } | null;
         name: string;
@@ -26,9 +27,10 @@ type Props = {
     }[];
     filter: '' | Status;
     counts: { new: number; confirmed: number; done: number; month: number };
+    outboundAvailable: boolean;
 };
 
-export default function Bookings({ bookings, filter, counts }: Props) {
+export default function Bookings({ bookings, filter, counts, outboundAvailable }: Props) {
     const [openCall, setOpenCall] = useState<number | null>(null);
     const setFilter = (status: '' | Status) => router.get('/bookings', status ? { status } : {}, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -152,6 +154,17 @@ export default function Bookings({ bookings, filter, counts }: Props) {
                                         </select>
                                     </td>
                                     <td className="r">
+                                        {outboundAvailable && b.phone && (
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ marginRight: 6 }}
+                                                title={b.aiCalledAt ? 'The AI already called this customer' : 'Your AI assistant phones this customer now'}
+                                                onClick={() => confirm(`Let your AI assistant call ${b.name} now? The call is billed per minute.`) && router.post(`/bookings/${b.id}/ai-callback`, {}, { preserveScroll: true })}
+                                            >
+                                                <Icon name="phone" className="i i-sm" />
+                                                {b.aiCalledAt ? 'Call again' : 'AI call back'}
+                                            </button>
+                                        )}
                                         {b.callId && (
                                             <button className="link" style={{ fontSize: 12.5 }} onClick={() => setOpenCall(b.callId)}>
                                                 View call

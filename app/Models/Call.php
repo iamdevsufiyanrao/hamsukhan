@@ -11,7 +11,7 @@ class Call extends Model
 {
     protected $fillable = [
         'vapi_call_id', 'title', 'outcome_tag', 'status', 'ended_reason', 'is_test', 'started_at', 'ended_at',
-        'duration_seconds', 'cost', 'recording_url', 'summary', 'unanswered', 'after_hours',
+        'duration_seconds', 'cost', 'recording_url', 'summary', 'unanswered', 'after_hours', 'direction', 'customer_number',
     ];
 
     protected function casts(): array
@@ -56,6 +56,8 @@ class Call extends Model
             'duration' => $this->duration_seconds,
             'cost' => (float) $this->cost,
             'quote' => $firstUser?->text,
+            'direction' => $this->direction ?? 'web',
+            'customerNumber' => $this->customer_number,
         ];
     }
 

@@ -39,6 +39,10 @@ type Props = {
         liveBooking: boolean;
         slotMinutes: number;
         calendarConnected: boolean;
+        transferNumber: string | null;
+        reminderHours: number | null;
+        phoneNumber: string | null;
+        outboundAvailable: boolean;
     };
     providers: { vapi: boolean; elevenlabs: boolean };
     voices: { id: number; name: string; createdAt: string; seconds: number; status: string; hasSample: boolean; pending: boolean }[];
@@ -118,6 +122,7 @@ export default function BotStudio(props: Props) {
                     {tab === 'configure' && (
                         <div className="stack">
                             <ConfigurePane bot={bot} languages={props.options.languages} />
+                            <PhoneCard bot={bot} />
                             <HoursCard hours={bot.hours} holidays={bot.holidays} liveBooking={bot.liveBooking} slotMinutes={bot.slotMinutes} calendarConnected={bot.calendarConnected} />
                             <CaptureFieldsCard fields={bot.captureFields} types={props.options.fieldTypes} presets={props.options.fieldPresets} />
                         </div>
@@ -1002,6 +1007,55 @@ function EmbedPane({ src, publicKey, installedAt }: { src: string; publicKey: st
                     <div>
                         <b>3</b>Reload your site. The call button appears in the position you set.
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ---------- Phone calls and handoff ---------- */
+function PhoneCard({ bot }: { bot: Props['bot'] }) {
+    const form = useForm({ transferNumber: bot.transferNumber ?? '', reminderHours: bot.reminderHours === null ? '' : String(bot.reminderHours) });
+
+    return (
+        <div className="card">
+            <div className="card-h">
+                <div>
+                    <h3>Phone calls and handoff</h3>
+                    <p>{bot.phoneNumber ? `Your assistant also answers ${bot.phoneNumber}.` : 'Ask support for a phone number if callers should reach your assistant by phone too.'}</p>
+                </div>
+            </div>
+            <div className="card-b stack">
+                <div className="grid-2">
+                    <div className="field">
+                        <label htmlFor="transfer">Transfer to a person</label>
+                        <input id="transfer" className={'input' + (form.errors.transferNumber ? ' bad' : '')} type="tel" placeholder="0300 1234567" value={form.data.transferNumber} onChange={(e) => form.setData('transferNumber', e.target.value)} />
+                        <span className="hint">On phone calls, the bot connects upset callers or anyone asking for a person to this number. Leave empty to only take callbacks.</span>
+                        <FieldError msg={form.errors.transferNumber} />
+                    </div>
+                    <div className="field">
+                        <label htmlFor="reminder">Appointment reminder call</label>
+                        <select id="reminder" className="select" value={form.data.reminderHours} disabled={!bot.outboundAvailable} onChange={(e) => form.setData('reminderHours', e.target.value)}>
+                            <option value="">Off</option>
+                            <option value="2">2 hours before</option>
+                            <option value="4">4 hours before</option>
+                            <option value="24">1 day before</option>
+                        </select>
+                        <span className="hint">{bot.outboundAvailable ? 'The bot calls the customer to confirm booked appointments. Each call is billed per minute like any call.' : 'Needs a phone number for outbound calls, ask support.'}</span>
+                    </div>
+                </div>
+                <div className="form-foot">
+                    <span>{form.isDirty ? 'Unsaved changes' : 'Saved'}</span>
+                    <button
+                        className="btn btn-primary"
+                        disabled={!form.isDirty || form.processing}
+                        onClick={() => {
+                            form.transform((d) => ({ transferNumber: d.transferNumber || null, reminderHours: d.reminderHours === '' ? null : Number(d.reminderHours) }));
+                            form.patch('/bot-studio/phone', { preserveScroll: true, onSuccess: () => form.setDefaults() });
+                        }}
+                    >
+                        Save
+                    </button>
                 </div>
             </div>
         </div>

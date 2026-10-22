@@ -141,7 +141,7 @@ class VapiService
                 'model' => config('hamsukhan.vapi.model'),
                 'temperature' => 0.3,
                 'messages' => [['role' => 'system', 'content' => $bot->systemPrompt()]],
-                'tools' => $this->liveBookingTools($bot) ?: null,
+                'tools' => array_merge($this->liveBookingTools($bot), $this->transferTools($bot)) ?: null,
             ]),
             'voice' => [
                 'provider' => '11labs',
@@ -166,6 +166,104 @@ class VapiService
 
         // Vapi rejects explicit nulls for optional fields.
         return array_filter($payload, fn ($v) => $v !== null && $v !== '');
+    }
+
+    /** Vapi's built-in transfer to the owner's number (phone calls only; on website calls the bot takes a callback instead). */
+    private function transferTools(Bot $bot): array
+    {
+        if (! $bot->transfer_number) {
+            return [];
+        }
+
+        return [[
+            'type' => 'transferCall',
+            'destinations' => [[
+                'type' => 'number',
+                'number' => $bot->transfer_number,
+                'message' => 'Ek minute, main aap ko team se connect kar rahi hoon.',
+                'description' => 'A person from the business team',
+            ]],
+        ]];
+    }
+
+    /** Phone numbers in the Vapi account, for the super admin's assign screen. @return list<array{id: string, number: ?string, name: ?string, provider: ?string, assistantId: ?string}> */
+    public function phoneNumbers(): array
+    {
+        if (! $this->enabled()) {
+            return [];
+        }
+        try {
+            $rows = $this->http()->get('/phone-number')->throw()->json() ?? [];
+        } catch (\Throwable $e) {
+            throw new RuntimeException(ProviderError::message($e, 'Vapi'), 0, $e);
+        }
+
+        return collect($rows)->map(fn ($n) => [
+            'id' => (string) ($n['id'] ?? ''),
+            'number' => $n['number'] ?? $n['sipUri'] ?? null,
+            'name' => $n['name'] ?? null,
+            'provider' => $n['provider'] ?? null,
+            'assistantId' => $n['assistantId'] ?? null,
+        ])->filter(fn ($n) => $n['id'] !== '')->values()->all();
+    }
+
+    /** Inbound calls on this Vapi number ring the bot's assistant. */
+    public function assignPhoneNumber(string $phoneNumberId, ?Bot $bot): void
+    {
+        try {
+            $this->http()->patch("/phone-number/{$phoneNumberId}", array_filter([
+                'assistantId' => $bot?->vapi_assistant_id,
+                'server' => $bot ? array_filter(['url' => route('webhooks.vapi'), 'secret' => config('hamsukhan.vapi.webhook_secret')]) : null,
+            ]) ?: ['assistantId' => null])->throw();
+        } catch (\Throwable $e) {
+            throw new RuntimeException(ProviderError::message($e, 'Vapi'), 0, $e);
+        }
+    }
+
+    /** Outbound calls need a number: the bot's own, else the platform's. */
+    public function outboundNumberId(Bot $bot): ?string
+    {
+        return $bot->vapi_phone_number_id ?: config('hamsukhan.vapi.phone_number_id') ?: null;
+    }
+
+    /**
+     * The bot calls a customer (callback request, appointment reminder). Billed like any call through the end-of-call report.
+     *
+     * @return string the Vapi call id
+     *
+     * @throws RuntimeException
+     */
+    public function outboundCall(Bot $bot, string $number, string $firstMessage, string $purpose, int $maxSeconds, array $metadata = []): string
+    {
+        $phoneNumberId = $this->outboundNumberId($bot);
+        if (! $this->enabled() || ! $phoneNumberId) {
+            throw new RuntimeException('Outbound calls need a Vapi phone number. Ask support to add one.');
+        }
+        if (! $this->isLive($bot)) {
+            throw new RuntimeException('Your bot is not live on Vapi yet. Fix it in Bot Studio first.');
+        }
+        try {
+            $call = $this->http()->post('/call', [
+                'assistantId' => $bot->vapi_assistant_id,
+                'phoneNumberId' => $phoneNumberId,
+                'customer' => ['number' => $number],
+                'assistantOverrides' => [
+                    'firstMessage' => $firstMessage,
+                    'maxDurationSeconds' => $maxSeconds,
+                    'metadata' => ['botId' => $bot->id, 'outbound' => $purpose] + $metadata,
+                    'model' => array_filter([
+                        'provider' => 'openai',
+                        'model' => config('hamsukhan.vapi.model'),
+                        'messages' => [['role' => 'system', 'content' => $bot->systemPrompt()."\n\nThis is an OUTBOUND call you are making. Purpose: {$purpose}. Be brief, say who you are first, and end the call politely if it is a bad time."]],
+                        'tools' => array_merge($this->liveBookingTools($bot), $this->transferTools($bot)) ?: null,
+                    ]),
+                ],
+            ])->throw()->json();
+        } catch (\Throwable $e) {
+            throw new RuntimeException(ProviderError::message($e, 'Vapi'), 0, $e);
+        }
+
+        return (string) ($call['id'] ?? '');
     }
 
     /** Function tools for live booking; Vapi calls our webhook with "tool-calls" (see VapiWebhookController). Only with opening hours set. */

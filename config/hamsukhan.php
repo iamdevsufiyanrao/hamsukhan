@@ -32,6 +32,8 @@ return [
         'webhook_secret' => env('VAPI_WEBHOOK_SECRET'),
         'base_url' => env('VAPI_BASE_URL', 'https://api.vapi.ai'),
         'model' => env('VAPI_MODEL', 'gpt-4o'),
+        // Default Vapi phone number (id) for outbound AI calls when the bot has no number of its own.
+        'phone_number_id' => env('VAPI_PHONE_NUMBER_ID'),
     ],
 
     'elevenlabs' => [

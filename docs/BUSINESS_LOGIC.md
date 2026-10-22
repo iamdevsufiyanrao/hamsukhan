@@ -180,3 +180,9 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - **Google Calendar** (`google_calendars`, tokens encrypted): owner connects in Integrations (OAuth, state-checked). Bookings made live become events in the primary calendar; marking one lost/spam deletes the event. If Google fails, slots still come from our own bookings and the error shows on Integrations.
 - **Two-step login** (`users.two_factor_*`): TOTP app + 8 single-use recovery codes (stored hashed). The login asks for the code before signing in; 5 tries/minute per pending login. "Log out other devices" deletes other DB sessions and rotates the remember token.
 - **Audio**: only one sound plays at a time in the app (`resources/js/lib/audioFocus.ts`).
+
+## Phone calls, transfer, AI callbacks, reminders (2026-10-22)
+- **Phone numbers**: bought/imported in Vapi (Twilio, Telnyx, Vonage, SIP; Vapi sells no +92 numbers). Super admin → Phone numbers assigns one to a bot (`bots.vapi_phone_number_id`); Vapi then rings that bot's assistant for inbound calls. Calls get `direction` (web/inbound/outbound) and `customer_number` from the report.
+- **Transfer to a person** (`bots.transfer_number`): Vapi `transferCall` tool; phone calls only. On website calls the bot takes a callback.
+- **AI callback**: Bookings → "AI call back" makes an outbound call (bot's number, else `vapi.phone_number_id`). Needs ≥60 s affordable (balance + monthly cap); not twice within 10 minutes; a `new` lead becomes `contacted`. Billed through the normal end-of-call report.
+- **Reminder calls** (`bots.reminder_hours` 2/4/24): every 15 minutes, confirmed bookings starting inside the window are called once (`bookings.reminder_called_at` is set before dialling).

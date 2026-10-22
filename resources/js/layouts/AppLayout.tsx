@@ -22,6 +22,7 @@ const TITLES: Record<string, [string, string]> = {
     'Admin/Messages': ['Super admin', 'Contact messages'],
     'Admin/VoiceSamples': ['Super admin', 'Sample voices'],
     'Admin/ProviderVoices': ['Super admin', 'ElevenLabs voices'],
+    'Admin/PhoneNumbers': ['Super admin', 'Phone numbers'],
     'Admin/Settings': ['Super admin', 'Platform settings'],
 };
 
@@ -31,6 +32,7 @@ const ADMIN_NAV: { href: string; label: string; icon: IconName; component: strin
     { href: '/admin/top-ups', label: 'Payments', icon: 'shield', component: 'Admin/TopUps' },
     { href: '/admin/voice-samples', label: 'Sample voices', icon: 'wave', component: 'Admin/VoiceSamples' },
     { href: '/admin/provider-voices', label: 'ElevenLabs voices', icon: 'mic', component: 'Admin/ProviderVoices' },
+    { href: '/admin/phone-numbers', label: 'Phone numbers', icon: 'phone', component: 'Admin/PhoneNumbers' },
     { href: '/admin/messages', label: 'Messages', icon: 'mail', component: 'Admin/Messages' },
     { href: '/admin/settings', label: 'Platform settings', icon: 'sliders', component: 'Admin/Settings' },
 ];

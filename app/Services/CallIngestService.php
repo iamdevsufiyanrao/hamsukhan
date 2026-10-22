@@ -58,6 +58,13 @@ class CallIngestService
                 'unanswered' => collect((array) Arr::get($structured, 'unansweredQuestions', []))->filter(fn ($q) => is_string($q) && trim($q) !== '')
                     ->map(fn ($q) => mb_substr(trim($q), 0, 200))->unique()->take(10)->values()->all() ?: null,
                 'after_hours' => BusinessHours::isOpen($bot, $started) === false,
+                // Vapi call.type: webCall | inboundPhoneCall | outboundPhoneCall
+                'direction' => match (Arr::get($message, 'call.type')) {
+                    'inboundPhoneCall' => 'inbound',
+                    'outboundPhoneCall' => 'outbound',
+                    default => 'web',
+                },
+                'customer_number' => Phone::clean(Arr::get($message, 'call.customer.number') ?? Arr::get($message, 'customer.number')),
             ]);
 
             foreach ($turns as $i => [$role, $text]) {

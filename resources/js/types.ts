@@ -6,6 +6,8 @@ export type CallRowData = {
     tag: string;
     status: CallStatus;
     isTest: boolean;
+    direction?: 'web' | 'inbound' | 'outbound';
+    customerNumber?: string | null;
     startedAt: string;
     duration: number;
     cost: number;

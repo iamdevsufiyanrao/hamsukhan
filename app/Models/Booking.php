@@ -13,11 +13,11 @@ class Booking extends Model
 
     public const TYPES = ['booking', 'order', 'callback'];
 
-    protected $fillable = ['call_id', 'type', 'source','customer_name', 'phone', 'request', 'preferred_time', 'details', 'status', 'starts_at', 'ends_at', 'vapi_call_id', 'google_event_id'];
+    protected $fillable = ['call_id', 'type', 'source','customer_name', 'phone', 'request', 'preferred_time', 'details', 'status', 'starts_at', 'ends_at', 'vapi_call_id', 'google_event_id', 'reminder_called_at', 'ai_callback_at'];
 
     protected function casts(): array
     {
-        return ['details' => 'array', 'starts_at' => 'datetime', 'ends_at' => 'datetime'];
+        return ['details' => 'array', 'starts_at' => 'datetime', 'ends_at' => 'datetime', 'reminder_called_at' => 'datetime', 'ai_callback_at' => 'datetime'];
     }
 
     public function bot(): BelongsTo
