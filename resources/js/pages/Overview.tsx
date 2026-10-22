@@ -2,6 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import CallChart from '@/components/CallChart';
 import CallDrawer from '@/components/CallDrawer';
+import LiveCallsPanel from '@/components/LiveCallsPanel';
 import CallRow from '@/components/CallRow';
 import Icon, { IconName } from '@/components/Icon';
 import { Seg, useUI } from '@/components/ui';
@@ -76,6 +77,7 @@ export default function Overview({ stats, series, intents, recentCalls, bot, set
     return (
         <>
             <Head title="Overview" />
+            <LiveCallsPanel />
             <div className="hello">
                 <div>
                     <h2>

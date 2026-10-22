@@ -44,7 +44,7 @@ class AccountController extends Controller
         $q = trim((string) $request->query('q', ''));
         $status = in_array($request->query('status'), ['active', 'suspended'], true) ? $request->query('status') : '';
 
-        $page = User::where('is_admin', false)
+        $page = User::where('is_admin', false)->whereNull('owner_id') // team members belong to their owner's account
             ->with('bot:id,user_id,business_name,is_active')
             ->withCount(['topUps as pending_topups' => fn ($t) => $t->where('status', 'pending')])
             ->when($q, fn ($w) => $w->where(fn ($x) => $x->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%")

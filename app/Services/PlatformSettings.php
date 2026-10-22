@@ -67,6 +67,8 @@ class PlatformSettings
         'vapi_webhook_secret' => ['hamsukhan.vapi.webhook_secret', 'string', true, 'providers'],
         'vapi_model' => ['hamsukhan.vapi.model', 'string', false, 'providers'],
         'vapi_phone_number_id' => ['hamsukhan.vapi.phone_number_id', 'string', false, 'providers'],
+        'vapi_listen_sample_rate' => ['hamsukhan.vapi.listen_sample_rate', 'number', false, 'providers'],
+        'vapi_listen_channels' => ['hamsukhan.vapi.listen_channels', 'number', false, 'providers'],
         'elevenlabs_api_key' => ['hamsukhan.elevenlabs.api_key', 'string', true, 'providers'],
         'elevenlabs_model' => ['hamsukhan.elevenlabs.model', 'string', false, 'providers'],
         'openai_api_key' => ['hamsukhan.openai.api_key', 'string', true, 'providers'],

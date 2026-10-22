@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Bot;
 use App\Models\KnowledgeFile;
+use App\Models\KnowledgeVersion;
 use App\Models\Voice;
 use App\Services\VapiService;
 use App\Support\BusinessHours;
@@ -20,7 +21,7 @@ class BotStudioController extends Controller
 
     public function show(Request $request): Response
     {
-        $user = $request->user();
+        $user = $request->user()->account();
         $bot = $user->bot()->with('knowledgeFiles')->firstOrFail();
         $tabs = ['configure', 'voice', 'knowledge', 'widget', 'embed'];
 
@@ -83,6 +84,15 @@ class BotStudioController extends Controller
                 'fieldPresets' => CaptureFields::presets(),
             ],
             'embedSrc' => url('/widget.js'),
+            'versions' => $bot->knowledgeVersions()->with('user:id,name')->latest('id')->limit(20)->get()->map(fn (KnowledgeVersion $v) => [
+                'id' => $v->id,
+                'at' => $v->created_at->toIso8601String(),
+                'by' => $v->user?->name,
+                'note' => $v->note,
+                'greeting' => $v->greeting,
+                'prompt' => $v->prompt,
+                'quickFacts' => $v->quick_facts,
+            ]),
         ]);
     }
 
@@ -99,7 +109,7 @@ class BotStudioController extends Controller
 
         return $this->save($request->user()->bot, [
             'greeting' => $data['greeting'],
-            'end_message' => $data['endMessage'],
+            'end_message' => $data['endMessage'] ?? null,
             'language' => $data['language'],
             'prompt' => $data['prompt'],
             'max_call_minutes' => $data['maxCallMinutes'],
@@ -109,7 +119,7 @@ class BotStudioController extends Controller
 
     public function updateVoice(Request $request): RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user()->account();
         $data = $request->validate([
             'voiceId' => ['nullable', 'integer', Rule::exists('voices', 'id')->where('user_id', $user->id)->where('status', 'ready')],
             // A preset id, or "el:<voice id>" for a voice from the ElevenLabs library (premade voices only).
@@ -246,8 +256,28 @@ class BotStudioController extends Controller
         return back()->with($error ? 'error' : 'success', $error ? 'Vapi sync failed: '.$error : 'Bot is live on Vapi');
     }
 
-    private function save(Bot $bot, array $attributes, string $message): RedirectResponse
+    /** Puts an earlier greeting / instructions / quick facts back (the current ones are kept in history too). */
+    public function restoreVersion(Request $request, KnowledgeVersion $version): RedirectResponse
     {
+        $bot = $request->user()->bot;
+        abort_unless($version->bot_id === $bot->id, 404);
+
+        return $this->save($bot, [
+            'greeting' => $version->greeting ?? $bot->greeting,
+            'prompt' => $version->prompt ?? $bot->prompt,
+            'quick_facts' => $version->quick_facts,
+        ], 'Earlier version restored', 'Before restoring the version of '.$version->created_at->format('j M, g:i A'));
+    }
+
+    private function save(Bot $bot, array $attributes, string $message, ?string $note = null): RedirectResponse
+    {
+        // History: keep what the bot knew before any change to its greeting, instructions or facts (last 50).
+        $tracked = ['greeting', 'prompt', 'quick_facts'];
+        if (collect($tracked)->contains(fn ($k) => array_key_exists($k, $attributes) && (string) $attributes[$k] !== (string) $bot->{$k})) {
+            $bot->knowledgeVersions()->create(['user_id' => request()->user()?->id, 'greeting' => $bot->greeting, 'prompt' => $bot->prompt, 'quick_facts' => $bot->quick_facts, 'note' => $note]);
+            $keep = $bot->knowledgeVersions()->latest('id')->limit(50)->pluck('id');
+            $bot->knowledgeVersions()->whereNotIn('id', $keep)->delete();
+        }
         $bot->update($attributes);
 
         if ($error = $this->vapi->trySync($bot->fresh())) {

@@ -84,6 +84,21 @@ class Bot extends Model
         return $this->hasMany(KnowledgeFile::class);
     }
 
+    public function liveCalls(): HasMany
+    {
+        return $this->hasMany(LiveCall::class);
+    }
+
+    public function knowledgeVersions(): HasMany
+    {
+        return $this->hasMany(KnowledgeVersion::class);
+    }
+
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
+    }
+
     /** The widget may run on this page's host: no allow-list, our own app, local testing, or a listed domain / its subdomain. */
     public function allowsOrigin(?string $origin): bool
     {

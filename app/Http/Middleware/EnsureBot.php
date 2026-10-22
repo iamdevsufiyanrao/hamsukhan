@@ -22,6 +22,7 @@ class EnsureBot
             if ($user->is_admin) {
                 return redirect()->route('admin.overview');
             }
+            abort_if($user->isMember(), 403, 'This team account has no bot. Ask the account owner.');
             $user->setRelation('bot', $this->provisioner->provision($user));
         }
 

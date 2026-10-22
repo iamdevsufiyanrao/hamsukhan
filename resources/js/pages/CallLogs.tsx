@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import CallDrawer from '@/components/CallDrawer';
+import LiveCallsPanel from '@/components/LiveCallsPanel';
 import CallRow from '@/components/CallRow';
 import Icon from '@/components/Icon';
 import AppLayout from '@/layouts/AppLayout';
@@ -42,6 +43,7 @@ export default function CallLogs({ calls, filters, summary }: Props) {
     return (
         <>
             <Head title="Call Logs" />
+            <LiveCallsPanel />
             <div className="summary-row">
                 <div className="card">
                     <small>Total calls</small>

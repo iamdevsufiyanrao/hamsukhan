@@ -15,7 +15,7 @@ class VoiceController extends Controller
 {
     public function store(Request $request, ElevenLabsService $elevenLabs, VapiService $vapi): RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user()->account();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:60'],
             // The in-browser recorder sends WAV. Safari/iPhone files are MP4/M4A (often detected as video/mp4); phone voice notes are M4A, AAC or OGG/Opus.
@@ -71,7 +71,7 @@ class VoiceController extends Controller
     /** Sends a voice that was recorded in demo mode (sim_ id) to ElevenLabs now. */
     public function push(Request $request, Voice $voice, ElevenLabsService $elevenLabs, VapiService $vapi): RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user()->account();
         abort_unless($voice->user_id === $user->id, 404);
         abort_unless($elevenLabs->enabled(), 409, 'ElevenLabs is not connected.');
 
@@ -92,14 +92,14 @@ class VoiceController extends Controller
 
     public function sample(Request $request, Voice $voice): StreamedResponse
     {
-        abort_unless($voice->user_id === $request->user()->id && $voice->sample_path && Storage::exists($voice->sample_path), 404);
+        abort_unless($voice->user_id === $request->user()->account()->id && $voice->sample_path && Storage::exists($voice->sample_path), 404);
 
         return Storage::response($voice->sample_path);
     }
 
     public function destroy(Request $request, Voice $voice, ElevenLabsService $elevenLabs, VapiService $vapi): RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user()->account();
         abort_unless($voice->user_id === $user->id, 404);
 
         // Voices the super admin imported from the shared ElevenLabs account are only unlinked, never deleted there.

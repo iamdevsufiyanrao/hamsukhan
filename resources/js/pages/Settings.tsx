@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { Avatar, FieldError, Modal, PasswordInput } from '@/components/ui';
 import SecuritySection, { type DeviceSession, type TwoFactor } from '@/components/SecuritySection';
+import TeamSection, { type Team } from '@/components/TeamSection';
 import AppLayout from '@/layouts/AppLayout';
 import { timeAgo } from '@/lib/format';
 import type { SharedProps } from '@/types';
@@ -17,7 +18,7 @@ type Notifications = {
     whatsappAvailable: boolean;
     recent: { kind: string; channel: string; status: string; error: string | null; at: string }[];
 };
-type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications; twoFactor: TwoFactor; sessions: DeviceSession[] };
+type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications; twoFactor: TwoFactor; sessions: DeviceSession[]; team: Team | null; isMember: boolean };
 
 const KIND_LABEL: Record<string, string> = { lead: 'New lead', low_balance: 'Low balance', daily_summary: 'Daily summary', integration_failed: 'Connector failed', cap_reached: 'Spending limit' };
 
@@ -86,7 +87,7 @@ function NotificationsSection({ n }: { n: Notifications }) {
     );
 }
 
-export default function Settings({ profile, timezones, notifications, twoFactor, sessions }: Props) {
+export default function Settings({ profile, timezones, notifications, twoFactor, sessions, team, isMember }: Props) {
     const { auth } = usePage<SharedProps>().props;
     const user = auth!.user;
     const info = useForm(profile);
@@ -173,7 +174,8 @@ export default function Settings({ profile, timezones, notifications, twoFactor,
                         </form>
                     </div>
 
-                    {auth?.bot && <NotificationsSection n={notifications} />}
+                    {auth?.bot && !isMember && <NotificationsSection n={notifications} />}
+                    {team && <TeamSection team={team} />}
                     <SecuritySection twoFactor={twoFactor} sessions={sessions} />
 
                     <div className="set-grid">

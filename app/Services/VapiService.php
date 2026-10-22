@@ -153,7 +153,9 @@ class VapiService
                 'url' => route('webhooks.vapi'),
                 'secret' => config('hamsukhan.vapi.webhook_secret'),
             ]),
-            'serverMessages' => ['end-of-call-report'],
+            'serverMessages' => ['end-of-call-report', 'status-update'],
+            // Owners can listen to and steer calls in progress (Dashboard → Live now).
+            'monitorPlan' => ['listenEnabled' => true, 'controlEnabled' => true],
             'metadata' => ['botId' => $bot->id],
             'analysisPlan' => [
                 'summaryPlan' => ['enabled' => true],
@@ -215,6 +217,32 @@ class VapiService
                 'assistantId' => $bot?->vapi_assistant_id,
                 'server' => $bot ? array_filter(['url' => route('webhooks.vapi'), 'secret' => config('hamsukhan.vapi.webhook_secret')]) : null,
             ]) ?: ['assistantId' => null])->throw();
+        } catch (\Throwable $e) {
+            throw new RuntimeException(ProviderError::message($e, 'Vapi'), 0, $e);
+        }
+    }
+
+    /** Monitor URLs of a call, when the status-update message didn't carry them. @return array{listenUrl: ?string, controlUrl: ?string} */
+    public function monitorUrls(string $callId): array
+    {
+        $m = rescue(fn () => $this->http()->get("/call/{$callId}")->throw()->json('monitor'), [], report: false) ?? [];
+
+        return ['listenUrl' => $m['listenUrl'] ?? null, 'controlUrl' => $m['controlUrl'] ?? null];
+    }
+
+    /**
+     * Live call control: {"type":"say","content":...} | {"type":"end-call"} | {"type":"add-message",...}.
+     *
+     * @throws RuntimeException
+     */
+    public function control(string $controlUrl, array $message): void
+    {
+        $host = (string) parse_url($controlUrl, PHP_URL_HOST);
+        if (! str_ends_with($host, '.vapi.ai')) {
+            throw new RuntimeException('Not a Vapi control URL.'); // never POST to anything else
+        }
+        try {
+            Http::acceptJson()->timeout(10)->post($controlUrl, $message)->throw();
         } catch (\Throwable $e) {
             throw new RuntimeException(ProviderError::message($e, 'Vapi'), 0, $e);
         }

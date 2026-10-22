@@ -58,6 +58,7 @@ type Props = {
         fieldPresets: Record<string, CaptureField[]>;
     };
     embedSrc: string;
+    versions: { id: number; at: string; by: string | null; note: string | null; greeting: string | null; prompt: string | null; quickFacts: string | null }[];
 };
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
@@ -128,7 +129,12 @@ export default function BotStudio(props: Props) {
                         </div>
                     )}
                     {tab === 'voice' && <VoicePane bot={bot} voices={props.voices} options={props.options} />}
-                    {tab === 'knowledge' && <KnowledgePane files={props.files} quickFacts={bot.quickFacts} />}
+                    {tab === 'knowledge' && (
+                        <div className="stack">
+                            <KnowledgePane files={props.files} quickFacts={bot.quickFacts} />
+                            <HistoryCard versions={props.versions} />
+                        </div>
+                    )}
                     {tab === 'widget' && <WidgetPane form={widget} wState={previewState} setWState={setPreviewState} />}
                     {tab === 'embed' && (
                         <>
@@ -1211,6 +1217,60 @@ function DomainsCard({ domains }: { domains: string[] }) {
                         Save websites
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/* ---------- History ---------- */
+function HistoryCard({ versions }: { versions: Props['versions'] }) {
+    const [open, setOpen] = useState<number | null>(null);
+
+    return (
+        <div className="card">
+            <div className="card-h">
+                <div>
+                    <h3>History</h3>
+                    <p>Every time the greeting, instructions or quick facts change, the earlier version is kept here. Restore one if a change made the bot worse.</p>
+                </div>
+            </div>
+            <div className="card-b" style={{ display: 'grid', gap: 8 }}>
+                {versions.length === 0 && <div className="empty">No earlier versions yet.</div>}
+                {versions.map((v) => (
+                    <div key={v.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <b>{fmtDateLong(v.at)}</b>
+                            <span className="hint">
+                                {new Date(v.at).toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit' })}
+                                {v.by ? ` · changed by ${v.by}` : ''}
+                                {v.note ? ` · ${v.note}` : ''}
+                            </span>
+                            <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                                <button className="btn btn-ghost btn-sm" onClick={() => setOpen(open === v.id ? null : v.id)}>
+                                    <Icon name="eye" className="i i-sm" />
+                                    {open === v.id ? 'Hide' : 'View'}
+                                </button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => confirm('Restore this version? What the bot knows now is kept in history.') && router.post(`/bot-studio/versions/${v.id}/restore`, {}, { preserveScroll: true })}>
+                                    <Icon name="refresh" className="i i-sm" />
+                                    Restore
+                                </button>
+                            </span>
+                        </div>
+                        {open === v.id && (
+                            <div className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6, display: 'grid', gap: 6 }} dir="auto">
+                                <span>
+                                    <b>Greeting:</b> {v.greeting}
+                                </span>
+                                <span>
+                                    <b>Instructions:</b> {v.prompt}
+                                </span>
+                                <span>
+                                    <b>Quick facts:</b> {v.quickFacts || '-'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                ))}
             </div>
         </div>
     );

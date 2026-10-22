@@ -31,6 +31,11 @@ class SettingsController extends Controller
                 'recoveryCodes' => session('recoveryCodes'),
             ],
             'sessions' => TwoFactorController::sessions($request),
+            'team' => ! $user->isMember() && ! $user->is_admin && $user->bot ? [
+                'max' => TeamController::MAX_MEMBERS,
+                'members' => $user->members()->orderBy('name')->get()->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'role' => $m->team_role]),
+            ] : null,
+            'isMember' => $user->isMember(),
             'notifications' => [
                 'email' => $user->notify_email,
                 'whatsapp' => $user->notify_whatsapp,
@@ -159,6 +164,15 @@ class SettingsController extends Controller
     {
         $request->validate(['confirm' => ['required', 'in:DELETE'], 'password' => ['required', 'current_password']]);
         $user = $request->user();
+        if ($user->isMember()) {
+            // A team member only removes their own login, never the owner's bot or data.
+            Auth::logout();
+            $user->delete();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->with('status', 'Your team login was deleted.');
+        }
 
         foreach ($user->voices as $voice) {
             rescue(fn () => $elevenLabs->deleteVoice($voice->provider_voice_id));

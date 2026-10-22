@@ -91,6 +91,12 @@ class CallIngestService
         });
 
         $this->wallet->chargeCall($call->setRelation('bot', $bot));
+
+        // A campaign call finished: mark that contact (scoped to this bot's campaigns).
+        if ($contactId = Arr::get($message, 'call.metadata.campaignContactId')) {
+            \App\Models\CampaignContact::whereKey($contactId)->whereHas('campaign', fn ($q) => $q->where('bot_id', $bot->id))
+                ->update(['status' => $status === 'failed' ? 'failed' : 'done', 'error' => $status === 'failed' ? mb_substr((string) Arr::get($message, 'endedReason'), 0, 300) : null]);
+        }
         $this->wallet->checkAlerts($bot->user()->first());
 
         // Push the booking/order into the customer's own software (their connectors) and alert the owner.

@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\KnowledgeFileController;
 use App\Http\Controllers\LegalController;
+use App\Http\Controllers\LiveCallController;
 use App\Http\Controllers\Admin\PhoneNumberController;
 use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
@@ -28,6 +29,9 @@ use App\Http\Controllers\GoogleCalendarController;
 use App\Http\Controllers\InsightsController;
 use App\Http\Middleware\EnsureBot;
 use App\Http\Middleware\EnsureEmailVerified;
+use App\Http\Middleware\EnsureTeamPermission;
+use App\Http\Controllers\TeamController;
+use App\Http\Controllers\CampaignController;
 use App\Http\Middleware\EnsureNotSuspended;
 use Illuminate\Support\Facades\Route;
 
@@ -67,7 +71,10 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
     Route::post('/settings/two-factor/recovery-codes', [TwoFactorController::class, 'regenerate'])->middleware('throttle:5,1')->name('two-factor.codes');
     Route::delete('/settings/two-factor', [TwoFactorController::class, 'disable'])->middleware('throttle:5,1')->name('two-factor.disable');
     Route::post('/settings/sessions/logout-others', [TwoFactorController::class, 'logoutOthers'])->middleware('throttle:5,1')->name('sessions.logout-others');
-    Route::patch('/settings/notifications',[SettingsController::class, 'updateNotifications'])->name('settings.notifications');
+    Route::post('/settings/team', [TeamController::class, 'store'])->middleware('throttle:10,1')->name('team.store');
+    Route::patch('/settings/team/{member}', [TeamController::class, 'update'])->name('team.update');
+    Route::delete('/settings/team/{member}', [TeamController::class, 'destroy'])->name('team.destroy');
+    Route::patch('/settings/notifications', [SettingsController::class, 'updateNotifications'])->name('settings.notifications');
     Route::post('/settings/notifications/test', [SettingsController::class, 'testNotification'])->middleware('throttle:3,1')->name('settings.notifications.test');
     Route::post('/settings/avatar', [SettingsController::class, 'updateAvatar'])->name('settings.avatar');
     Route::delete('/settings/avatar', [SettingsController::class, 'destroyAvatar'])->name('settings.avatar.destroy');
@@ -116,7 +123,7 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
 });
 
 // ---------- Customer app (needs a bot) ----------
-Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class, EnsureBot::class])->group(function () {
+Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class, EnsureBot::class, EnsureTeamPermission::class])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('/bot-studio', [BotStudioController::class, 'show'])->name('bot-studio');
@@ -128,7 +135,8 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::patch('/bot-studio/hours', [BotStudioController::class, 'updateHours'])->name('bot.hours');
     Route::patch('/bot-studio/domains', [BotStudioController::class, 'updateDomains'])->name('bot.domains');
     Route::patch('/bot-studio/phone', [BotStudioController::class, 'updatePhone'])->name('bot.phone');
-    Route::post('/bot-studio/sync',[BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
+    Route::post('/bot-studio/versions/{version}/restore', [BotStudioController::class, 'restoreVersion'])->name('bot.versions.restore');
+    Route::post('/bot-studio/sync', [BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
 
     Route::post('/voices', [VoiceController::class, 'store'])->middleware('throttle:10,1')->name('voices.store');
     Route::post('/voices/{voice}/push', [VoiceController::class, 'push'])->middleware('throttle:10,1')->name('voices.push');
@@ -139,12 +147,20 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::delete('/knowledge/{file}', [KnowledgeFileController::class, 'destroy'])->name('knowledge.destroy');
 
     Route::get('/calls', [CallController::class, 'index'])->name('calls');
+    Route::get('/live-calls', [LiveCallController::class, 'index'])->name('live-calls');
+    Route::post('/live-calls/{liveCall}/say', [LiveCallController::class, 'say'])->middleware('throttle:20,1')->name('live-calls.say');
+    Route::post('/live-calls/{liveCall}/instruct', [LiveCallController::class, 'instruct'])->middleware('throttle:20,1')->name('live-calls.instruct');
+    Route::post('/live-calls/{liveCall}/end', [LiveCallController::class, 'end'])->middleware('throttle:20,1')->name('live-calls.end');
     Route::get('/calls/export', [CallController::class, 'export'])->name('calls.export');
     Route::get('/calls/{call}', [CallController::class, 'show'])->name('calls.show');
     Route::post('/test-call/finish', TestCallController::class)->name('test-call.finish');
 
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings');
     Route::get('/insights', InsightsController::class)->name('insights');
+    Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns');
+    Route::post('/campaigns', [CampaignController::class, 'store'])->middleware('throttle:10,1')->name('campaigns.store');
+    Route::patch('/campaigns/{campaign}', [CampaignController::class, 'status'])->name('campaigns.status');
+    Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
     Route::patch('/bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
     Route::post('/bookings/{booking}/ai-callback', [BookingController::class, 'aiCallback'])->middleware('throttle:10,1')->name('bookings.ai-callback');
 

@@ -12,6 +12,7 @@ const TITLES: Record<string, [string, string]> = {
     CallLogs: ['Workspace', 'Call Logs'],
     Bookings: ['Workspace', 'Bookings'],
     Insights: ['Workspace', 'Insights'],
+    Campaigns: ['Workspace', 'Campaigns'],
     Billing: ['Account', 'Billing'],
     Settings: ['Account', 'Settings'],
     Integrations: ['Workspace', 'Integrations'],
@@ -78,8 +79,9 @@ function Shell({ children }: { children: ReactNode }) {
         { href: '/calls', label: 'Call Logs', icon: 'phone', component: 'CallLogs' },
         { href: '/bookings', label: 'Bookings', icon: 'calendar', component: 'Bookings', badge: badges.newBookings },
         { href: '/insights', label: 'Insights', icon: 'trend', component: 'Insights' },
+        { href: '/campaigns', label: 'Campaigns', icon: 'send', component: 'Campaigns' },
         { href: '/integrations', label: 'Integrations', icon: 'plug', component: 'Integrations' },
-        { href: '/billing', label: 'Billing', icon: 'wallet', component: 'Billing' },
+        ...(user.teamRole ? [] : [{ href: '/billing', label: 'Billing', icon: 'wallet' as IconName, component: 'Billing' }]),
     ];
     const fill = Math.min(100, (wallet.balance / 50) * 100);
 

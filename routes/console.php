@@ -21,6 +21,9 @@ Schedule::call(function () {
 // Appointment reminder calls (bots with reminder_hours set; each booking is called at most once).
 Schedule::call(fn () => app(\App\Services\OutboundService::class)->sendDueReminders())->everyFifteenMinutes()->name('reminder-calls')->withoutOverlapping();
 
+// Outbound campaigns: next few contacts of every running campaign, inside opening hours.
+Schedule::call(fn () => app(\App\Services\OutboundService::class)->runCampaigns())->everyFiveMinutes()->name('campaign-calls')->withoutOverlapping();
+
 // Public landing-page demo calls are kept at most 7 days (promised on /privacy). They live on the demo bot as test calls.
 Schedule::call(function () {
     $bot = ($key = config('hamsukhan.demo.bot_key')) ? \App\Models\Bot::where('public_key', $key)->first() : null;

@@ -68,6 +68,50 @@ class OutboundService
         return $placed;
     }
 
+    /**
+     * Every 5 minutes: each running campaign calls its next few contacts, only while the business is open
+     * (or 10:00–20:00 Pakistan time when no hours are set). A campaign pauses itself when the balance runs out.
+     */
+    public function runCampaigns(): int
+    {
+        $placed = 0;
+        \App\Models\Campaign::with('bot.user')->where('status', 'running')->each(function (\App\Models\Campaign $c) use (&$placed) {
+            $bot = $c->bot;
+            // Calls we never got a report for are closed after 30 minutes.
+            $c->contacts()->where('status', 'calling')->where('called_at', '<', now()->subMinutes(30))->update(['status' => 'done']);
+
+            if (! $c->contacts()->whereIn('status', ['pending', 'calling'])->exists()) {
+                $c->update(['status' => 'done']);
+
+                return;
+            }
+            $open = BusinessHours::isOpen($bot, now());
+            $hour = (int) now(BusinessHours::TIMEZONE)->format('G');
+            if ($open === false || ($open === null && ($hour < 10 || $hour >= 20)) || ! $this->available($bot) || $bot->user->isSuspended()) {
+                return;
+            }
+            $free = max(0, $c->per_run - $c->contacts()->where('status', 'calling')->count());
+            foreach ($c->contacts()->where('status', 'pending')->orderBy('id')->limit($free)->get() as $contact) {
+                $contact->update(['status' => 'calling', 'called_at' => now()]);
+                try {
+                    $id = $this->vapi->outboundCall($bot, $contact->phone,
+                        str_replace('{name}', $contact->name ?: '', $c->first_message),
+                        $c->purpose, min(300, $this->affordable($bot)), ['campaignContactId' => $contact->id]);
+                    $contact->update(['vapi_call_id' => $id]);
+                    $placed++;
+                } catch (RuntimeException $e) {
+                    $contact->update(['status' => str_contains($e->getMessage(), 'balance') ? 'pending' : 'failed', 'error' => mb_strimwidth($e->getMessage(), 0, 300, '…'), 'called_at' => null]);
+                    if (str_contains($e->getMessage(), 'balance')) {
+                        $c->update(['status' => 'paused']);
+                        break;
+                    }
+                }
+            }
+        });
+
+        return $placed;
+    }
+
     private function affordable(\App\Models\Bot $bot): int
     {
         $seconds = $this->wallet->maxAffordableSeconds($bot->user, $bot->max_call_minutes);

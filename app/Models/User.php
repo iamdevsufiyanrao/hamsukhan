@@ -6,6 +6,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -46,9 +47,33 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
+    /** Team members work on their owner's bot. */
     public function bot(): HasOne
     {
-        return $this->hasOne(Bot::class);
+        return $this->hasOne(Bot::class, 'user_id', $this->owner_id ? 'owner_id' : 'id');
+    }
+
+    public const TEAM_ROLES = ['admin', 'operator', 'viewer'];
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function members(): HasMany
+    {
+        return $this->hasMany(User::class, 'owner_id');
+    }
+
+    /** The account that owns the bot, voices, calendar and wallet: the owner for a team member, else this user. */
+    public function account(): User
+    {
+        return $this->owner_id ? ($this->owner ?? $this) : $this;
+    }
+
+    public function isMember(): bool
+    {
+        return $this->owner_id !== null;
     }
 
     public function googleCalendar(): HasOne
@@ -78,7 +103,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isSuspended(): bool
     {
-        return $this->suspended_at !== null;
+        return $this->suspended_at !== null || ($this->owner_id !== null && $this->owner?->suspended_at !== null);
     }
 
     public function initials(): string

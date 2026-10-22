@@ -253,7 +253,7 @@ function MailTab({ values }: { values: Values }) {
 
 function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: string }) {
     const secretKeys = ['vapi_private_key', 'vapi_webhook_secret', 'elevenlabs_api_key', 'openai_api_key', 'whatsapp_token', 'google_client_secret'];
-    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang', 'google_client_id', 'vapi_phone_number_id'];
+    const plainKeys = ['vapi_public_key', 'vapi_model', 'elevenlabs_model', 'whatsapp_phone_id', 'whatsapp_template', 'whatsapp_template_lang', 'google_client_id', 'vapi_phone_number_id', 'vapi_listen_sample_rate', 'vapi_listen_channels'];
     const googleRedirect = `${window.location.origin}/integrations/google/callback`;
     const [waTo, setWaTo] = useState('');
     const form = useForm<Values>({ ...Object.fromEntries(secretKeys.map((k) => [k, ''])), ...Object.fromEntries(plainKeys.map((k) => [k, values[k] ?? ''])) });
@@ -311,6 +311,23 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
                         <label htmlFor="vapi_phone_number_id">Default outbound phone number ID</label>
                         <input id="vapi_phone_number_id" className="input mono" placeholder="from Vapi → Phone Numbers" value={form.data.vapi_phone_number_id} onChange={(e) => form.setData('vapi_phone_number_id', e.target.value)} />
                         <span className="hint">Used for AI callbacks and reminders of customers without their own number. Assign numbers to customers under Phone numbers.</span>
+                    </div>
+                    <div className="field">
+                        <label htmlFor="vapi_listen_sample_rate">Live listen audio</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <select id="vapi_listen_sample_rate" className="select" value={String(form.data.vapi_listen_sample_rate || 16000)} onChange={(e) => form.setData('vapi_listen_sample_rate', e.target.value)}>
+                                {['8000', '16000', '24000', '32000', '48000'].map((r) => (
+                                    <option key={r} value={r}>
+                                        {Number(r) / 1000} kHz
+                                    </option>
+                                ))}
+                            </select>
+                            <select aria-label="Channels" className="select" value={String(form.data.vapi_listen_channels || 1)} onChange={(e) => form.setData('vapi_listen_channels', e.target.value)}>
+                                <option value="1">Mono</option>
+                                <option value="2">Stereo</option>
+                            </select>
+                        </div>
+                        <span className="hint">Vapi does not document the live-listen format. If listening sounds too fast or slow, change the kHz; if it sounds garbled, switch mono/stereo.</span>
                     </div>
                     <div className="field">
                         <label htmlFor="vapi_model">LLM model</label>

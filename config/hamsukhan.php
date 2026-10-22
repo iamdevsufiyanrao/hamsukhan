@@ -34,6 +34,10 @@ return [
         'model' => env('VAPI_MODEL', 'gpt-4o'),
         // Default Vapi phone number (id) for outbound AI calls when the bot has no number of its own.
         'phone_number_id' => env('VAPI_PHONE_NUMBER_ID'),
+        // Raw PCM (16-bit little-endian) format of the live-listen stream. Vapi does not document it; adjust after a test call
+        // if live audio sounds too fast/slow (sample rate) or garbled (channels).
+        'listen_sample_rate' => (int) env('VAPI_LISTEN_SAMPLE_RATE', 16000),
+        'listen_channels' => (int) env('VAPI_LISTEN_CHANNELS', 1),
     ],
 
     'elevenlabs' => [

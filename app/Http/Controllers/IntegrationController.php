@@ -58,9 +58,9 @@ class IntegrationController extends Controller
             'max' => config('hamsukhan.integrations.max_per_bot'),
             'calendar' => [
                 'available' => app(\App\Services\GoogleCalendarService::class)->enabled(),
-                'email' => $request->user()->googleCalendar?->google_email,
-                'connected' => (bool) $request->user()->googleCalendar,
-                'error' => $request->user()->googleCalendar?->last_error,
+                'email' => $request->user()->account()->googleCalendar?->google_email,
+                'connected' => (bool) $request->user()->account()->googleCalendar,
+                'error' => $request->user()->account()->googleCalendar?->last_error,
                 'liveBooking' => $bot->live_booking,
             ],
         ]);

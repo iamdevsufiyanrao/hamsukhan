@@ -33,7 +33,7 @@ class GoogleCalendarController extends Controller
         }
 
         try {
-            $cal = $google->connect($request->user(), (string) $request->query('code'));
+            $cal = $google->connect($request->user()->account(), (string) $request->query('code'));
         } catch (RuntimeException $e) {
             report($e);
 
@@ -45,7 +45,7 @@ class GoogleCalendarController extends Controller
 
     public function disconnect(Request $request, GoogleCalendarService $google): RedirectResponse
     {
-        if ($cal = $request->user()->googleCalendar) {
+        if ($cal = $request->user()->account()->googleCalendar) {
             $google->disconnect($cal);
         }
 
