@@ -14,7 +14,7 @@
     var base = new URL(script.src).origin;
     if (!key) return console.warn('[Hamsukhan] data-bot attribute missing');
 
-    var SDK = 'https://esm.sh/@vapi-ai/web@2';
+    var SDK = 'https://esm.sh/@vapi-ai/web@3.0.0'; // exact version (v2 pulled an unsupported daily-js)
     var ICONS = {
         idle: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/>',
         loading: '<path d="M21 12a9 9 0 1 1-6.2-8.6"/>',

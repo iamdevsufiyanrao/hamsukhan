@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [VoiceSampleController::class, 'landing'])->name('home');
 Route::get('/voice-samples/{sample}/play', [VoiceSampleController::class, 'play'])->middleware(['signed', 'throttle:60,1'])->name('voice-samples.play');
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact');
+Route::post('/client-errors', \App\Http\Controllers\ClientErrorController::class)->middleware('throttle:20,1')->name('client-errors');
 Route::get('/terms', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy', [LegalController::class, 'privacy'])->name('privacy');
 

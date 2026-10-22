@@ -4,7 +4,8 @@ import { claimAudio } from './audioFocus';
 export type CallPhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 export type Turn = { role: 'user' | 'ai'; text: string };
 
-const SDK_URL = 'https://esm.sh/@vapi-ai/web@2';
+// Exact version: v2 pulled daily-js 0.87, which Daily no longer supports.
+const SDK_URL = 'https://esm.sh/@vapi-ai/web@3.0.0';
 
 /** Pulls a readable sentence out of the many error shapes the Vapi SDK emits. */
 function errorText(e: any): string {

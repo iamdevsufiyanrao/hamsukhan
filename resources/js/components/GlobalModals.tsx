@@ -34,7 +34,10 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
         setNote('Call ended. It appears in Call Logs as soon as Vapi sends the report (usually within a minute).');
     });
     const scroller = useRef<HTMLDivElement>(null);
-    useEffect(() => scroller.current?.scrollTo(0, scroller.current.scrollHeight), [call.turns, call.partial]);
+    // Block body on purpose: newer Chrome returns a Promise from scrollTo(), and React must not get it as a clean-up.
+    useEffect(() => {
+        scroller.current?.scrollTo(0, scroller.current.scrollHeight);
+    }, [call.turns, call.partial]);
 
     const reset = () => {
         window.clearInterval(timer.current);

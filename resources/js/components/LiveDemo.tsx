@@ -33,7 +33,10 @@ export default function LiveDemo({ demoBotKey, maxSeconds = 90 }: { demoBotKey: 
     const timer = useRef<number>(undefined);
     const call = useVapiCall(() => window.clearInterval(timer.current));
     const box = useRef<HTMLDivElement>(null);
-    useEffect(() => box.current?.scrollTo(0, box.current.scrollHeight), [call.turns, call.partial]);
+    // Block body on purpose: newer Chrome returns a Promise from scrollTo(), and React must not get it as a clean-up.
+    useEffect(() => {
+        box.current?.scrollTo(0, box.current.scrollHeight);
+    }, [call.turns, call.partial]);
     useEffect(() => () => window.clearInterval(timer.current), []);
     useEffect(() => {
         if (call.error) {

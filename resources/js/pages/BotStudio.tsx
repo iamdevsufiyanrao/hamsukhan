@@ -836,7 +836,9 @@ function KnowledgePane({ files, quickFacts }: { files: Props['files']; quickFact
 function WidgetPane({ form, wState, setWState }: { form: ReturnType<typeof useForm<Widget>>; wState: WState; setWState: (s: WState) => void }) {
     const cur = form.data.states[wState];
     const [colorText, setColorText] = useState(cur.color.toUpperCase());
-    useEffect(() => setColorText(cur.color.toUpperCase()), [wState, cur.color]);
+    useEffect(() => {
+        setColorText(cur.color.toUpperCase());
+    }, [wState, cur.color]);
     const patch = (p: Partial<WStyle>) => form.setData('states', { ...form.data.states, [wState]: { ...cur, ...p } });
     const err = (k: string) => (form.errors as Record<string, string>)[`states.${wState}.${k}`];
 
