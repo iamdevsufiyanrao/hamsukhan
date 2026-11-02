@@ -160,6 +160,10 @@ export default function Integrations({ integrations, deliveries, sources, events
                         <Icon name="download" />
                         PHP / Laravel connector
                     </a>
+                    <a className="btn btn-ghost" href="/docs#integrations" target="_blank" rel="noopener">
+                        <Icon name="book" />
+                        Guide & code examples
+                    </a>
                     <button className="btn btn-primary" disabled={integrations.length >= max} onClick={() => setEditing('new')}>
                         <Icon name="plus" />
                         Add connector

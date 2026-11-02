@@ -612,6 +612,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                                 {label}
                             </button>
                         ))}
+                        <Link href="/docs">Guide</Link>
                         {wa ? (
                             <a href={wa} target="_blank" rel="noopener">
                                 WhatsApp Support
@@ -1252,6 +1253,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                     <div className="lp-foot-col">
                         <b>Company</b>
                         <button onClick={() => go('faq')}>FAQ</button>
+                        <Link href="/docs">Guide & developer docs</Link>
                         <button onClick={() => go('contact')}>Contact us</button>
                         {wa && (
                             <a href={wa} target="_blank" rel="noopener">

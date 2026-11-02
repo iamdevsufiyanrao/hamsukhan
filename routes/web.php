@@ -48,6 +48,12 @@ Route::get('/voice-samples/{sample}/play', [VoiceSampleController::class, 'play'
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1')->name('contact');
 Route::post('/client-errors', \App\Http\Controllers\ClientErrorController::class)->middleware('throttle:20,1')->name('client-errors');
 Route::get('/terms', [LegalController::class, 'terms'])->name('terms');
+// Public guide + developer docs (setup, bookings/orders, connectors, code per language).
+Route::get('/docs', fn () => \Inertia\Inertia::render('Docs', [
+    'appUrl' => rtrim(config('app.url'), '/'),
+    'site' => config('hamsukhan.site.name'),
+    'supportEmail' => config('hamsukhan.site.support_email'),
+]))->name('docs');
 Route::get('/privacy', [LegalController::class, 'privacy'])->name('privacy');
 // Shopify "App URL": the merchant opened/installed the Hamsukhan app in their Shopify admin (logs in first if needed).
 Route::get('/shopify/install', [ShopifyController::class, 'install'])->middleware('throttle:20,1')->name('shopify.install');

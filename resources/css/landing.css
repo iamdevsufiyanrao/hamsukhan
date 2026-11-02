@@ -43,8 +43,8 @@ html{scroll-padding-top:84px}
 .lp-nav .brand,.lp-foot .brand{padding:0;font-family:var(--lp-display)}
 .lp-links{display:flex;gap:2px;margin:0 auto;padding:4px;border-radius:99px;border:1px solid transparent;transition:border-color .3s,background .3s}
 .lp-nav:not(.scrolled) .lp-links{background:color-mix(in srgb,var(--surface) 60%,transparent);border-color:var(--border)}
-.lp-links button{padding:7px 14px;border-radius:99px;font-weight:700;font-size:13.5px;color:var(--text-2);transition:color .2s,background .2s}
-.lp-links button:hover{color:var(--text);background:var(--sunken)}
+.lp-links button,.lp-links>a{padding:7px 14px;text-decoration:none;border-radius:99px;font-weight:700;font-size:13.5px;color:var(--text-2);transition:color .2s,background .2s}
+.lp-links button:hover,.lp-links>a:hover{color:var(--text);background:var(--sunken)}
 .lp-nav-acts{display:flex;align-items:center;gap:8px}
 .lp .lp-burger{display:none}
 .lp-announce{background:var(--ink);color:var(--ink-text);text-align:center;font-weight:700;font-size:13px;padding:9px 16px}
