@@ -28,6 +28,13 @@ class PlatformSettings
         'support_phone' => ['hamsukhan.site.support_phone', 'string', false, 'site'],
         'allow_signups' => ['hamsukhan.site.allow_signups', 'bool', false, 'site'],
         'announcement' => ['hamsukhan.site.announcement', 'text', false, 'site'],
+        // Brand media (files go through Admin\MediaController; the YouTube link and switches through the Site form)
+        'site_logo' => ['hamsukhan.site.logo_url', 'string', false, 'media'],
+        'intro_video' => ['hamsukhan.site.intro_video', 'string', false, 'media'],
+        'intro_poster' => ['hamsukhan.site.intro_poster', 'string', false, 'media'],
+        'intro_enabled' => ['hamsukhan.site.intro_enabled', 'bool', false, 'site'],
+        'intro_youtube' => ['hamsukhan.site.intro_youtube', 'url', false, 'site'],
+        'intro_vertical' => ['hamsukhan.site.intro_vertical', 'bool', false, 'site'],
         'terms_url' => ['hamsukhan.site.terms_url', 'url', false, 'site'],
         'privacy_url' => ['hamsukhan.site.privacy_url', 'url', false, 'site'],
         'whatsapp_number' => ['hamsukhan.site.whatsapp', 'string', false, 'site'],
@@ -56,6 +63,26 @@ class PlatformSettings
         'business_price_pkr' => ['hamsukhan.plans.business.price_pkr', 'number', false, 'billing'],
         'business_fair_use_minutes' => ['hamsukhan.plans.business.fair_use_minutes', 'number', false, 'billing'],
         'trial_days' => ['hamsukhan.trial_days', 'number', false, 'billing'],
+        // Concurrent calls
+        'concurrency_enabled' => ['hamsukhan.concurrency.enabled', 'bool', false, 'billing'],
+        'basic_concurrent_calls' => ['hamsukhan.plans.basic.concurrent_calls', 'number', false, 'billing'],
+        'business_concurrent_calls' => ['hamsukhan.plans.business.concurrent_calls', 'number', false, 'billing'],
+        'platform_max_calls' => ['hamsukhan.concurrency.platform_max', 'number', false, 'billing'],
+        'manual_payments' => ['hamsukhan.manual_payments', 'bool', false, 'billing'],
+        // Easypaisa online checkout (Easypay)
+        'easypaisa_online_enabled' => ['hamsukhan.easypaisa.enabled', 'bool', false, 'billing'],
+        'easypaisa_sandbox' => ['hamsukhan.easypaisa.sandbox', 'bool', false, 'billing'],
+        'easypaisa_store_id' => ['hamsukhan.easypaisa.store_id', 'string', false, 'billing'],
+        'easypaisa_hash_key' => ['hamsukhan.easypaisa.hash_key', 'string', true, 'billing'],
+        'easypaisa_username' => ['hamsukhan.easypaisa.username', 'string', false, 'billing'],
+        'easypaisa_password' => ['hamsukhan.easypaisa.password', 'string', true, 'billing'],
+        'easypaisa_account_num' => ['hamsukhan.easypaisa.account_num', 'string', false, 'billing'],
+        // JazzCash online checkout
+        'jazzcash_online_enabled' => ['hamsukhan.jazzcash.enabled', 'bool', false, 'billing'],
+        'jazzcash_sandbox' => ['hamsukhan.jazzcash.sandbox', 'bool', false, 'billing'],
+        'jazzcash_merchant_id' => ['hamsukhan.jazzcash.merchant_id', 'string', false, 'billing'],
+        'jazzcash_password' => ['hamsukhan.jazzcash.password', 'string', true, 'billing'],
+        'jazzcash_integrity_salt' => ['hamsukhan.jazzcash.integrity_salt', 'string', true, 'billing'],
         'jazzcash_title' => ['hamsukhan.payment_accounts.jazzcash.title', 'string', false, 'billing'],
         'jazzcash_number' => ['hamsukhan.payment_accounts.jazzcash.number', 'string', false, 'billing'],
         'easypaisa_title' => ['hamsukhan.payment_accounts.easypaisa.title', 'string', false, 'billing'],
@@ -85,6 +112,10 @@ class PlatformSettings
         'connectors_enabled' => ['hamsukhan.integrations.enabled', 'bool', false, 'plugins'],
         'form_connectors_enabled' => ['hamsukhan.integrations.form_enabled', 'bool', false, 'plugins'],
         'connectors_max_per_bot' => ['hamsukhan.integrations.max_per_bot', 'number', false, 'plugins'],
+        // Shopify app
+        'shopify_enabled' => ['hamsukhan.shopify.enabled', 'bool', false, 'plugins'],
+        'shopify_client_id' => ['hamsukhan.shopify.client_id', 'string', false, 'plugins'],
+        'shopify_client_secret' => ['hamsukhan.shopify.client_secret', 'string', true, 'plugins'],
     ];
 
     /** Copy DB values into config(). Safe before migrations have run. */

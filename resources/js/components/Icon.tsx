@@ -1,3 +1,5 @@
+import { usePage } from '@inertiajs/react';
+import type { SharedProps } from '@/types';
 const PATHS = {
     home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
@@ -53,14 +55,12 @@ export default function Icon({ name, className = 'i' }: { name: IconName; classN
     return <svg className={className} viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML={{ __html: PATHS[name] }} />;
 }
 
+/** The brand mark (the headset mascot from the brand kit, or the logo the super admin uploaded) + wordmark. */
 export function Logo() {
+    const logoUrl = usePage<SharedProps>().props.site?.logoUrl;
     return (
         <span className="brand">
-            <span className="mark">
-                <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round">
-                    <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" />
-                </svg>
-            </span>
+            <img className="mark" src={logoUrl || '/brand/hamsukhan-icon.svg'} alt="" width={32} height={32} />
             <span>
                 Ham<b>sukhan</b>
             </span>

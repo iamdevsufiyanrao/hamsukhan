@@ -1,11 +1,18 @@
 <?php
 
+use App\Http\Controllers\ShopifyController;
 use App\Http\Controllers\VapiWebhookController;
 use App\Http\Controllers\WidgetController;
 use Illuminate\Support\Facades\Route;
 
 // Stateless, no CSRF: called by Vapi's servers and by widget.js on customers' websites.
 Route::post('/webhooks/vapi', VapiWebhookController::class)->middleware('throttle:120,1')->name('webhooks.vapi');
+
+// Shopify app: app/uninstalled and the mandatory privacy webhooks (HMAC-verified in the controller).
+Route::post('/shopify/webhooks', [ShopifyController::class, 'webhook'])->middleware('throttle:120,1')->name('shopify.webhook');
+
+// JazzCash posts the signed payment result here (cross-site, so no session/CSRF); see JazzCashController.
+Route::post('/payments/jazzcash/return', [\App\Http\Controllers\JazzCashController::class, 'return'])->middleware('throttle:30,1')->name('jazzcash.return');
 
 // Landing-page live demo (never billed; its own per-IP hourly limit lives in the controller).
 Route::post('/demo/start', [WidgetController::class, 'demo'])->middleware('throttle:10,1')->name('demo.start');

@@ -63,6 +63,16 @@ class IntegrationController extends Controller
                 'error' => $request->user()->account()->googleCalendar?->last_error,
                 'liveBooking' => $bot->live_booking,
             ],
+            'shopify' => [
+                'enabled' => app(\App\Services\ShopifyService::class)->enabled(),
+                'shops' => $bot->shopifyShops()->latest()->get()->map(fn (\App\Models\ShopifyShop $s) => [
+                    'id' => $s->id,
+                    'shop' => $s->shop,
+                    'installedAt' => $s->installed_at?->toIso8601String(),
+                    'widgetOn' => (bool) $s->script_tag_id,
+                    'uninstalledAt' => $s->uninstalled_at?->toIso8601String(),
+                ]),
+            ],
         ]);
     }
 

@@ -33,7 +33,7 @@ class AccountController extends Controller
                 // What Vapi charged for this month's calls (USD), to compare with plan revenue.
                 'providerCostThisMonth' => round((float) Call::where('started_at', '>=', $monthStart)->sum('cost'), 2),
                 'activePlans' => collect(array_keys(config('hamsukhan.plans')))->mapWithKeys(fn ($p) => [$p => User::where('plan', $p)->where('plan_expires_at', '>', now())->count()]),
-                'pendingTopUps' => TopUp::where('status', 'pending')->count(),
+                'pendingTopUps' => TopUp::awaitingReview()->count(),
             ],
             'recentActions' => AdminAction::with('admin:id,name', 'target:id,name')->latest('created_at')->limit(10)->get()->map(fn (AdminAction $a) => $this->actionRow($a)),
         ]);
@@ -46,7 +46,7 @@ class AccountController extends Controller
 
         $page = User::where('is_admin', false)->whereNull('owner_id') // team members belong to their owner's account
             ->with('bot:id,user_id,business_name,is_active')->withCount('bots')
-            ->withCount(['topUps as pending_topups' => fn ($t) => $t->where('status', 'pending')])
+            ->withCount(['topUps as pending_topups' => fn ($t) => $t->awaitingReview()])
             ->when($q, fn ($w) => $w->where(fn ($x) => $x->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%")
                 ->orWhereHas('bot', fn ($b) => $b->where('business_name', 'like', "%{$q}%"))))
             ->when($status === 'suspended', fn ($w) => $w->whereNotNull('suspended_at'))

@@ -94,6 +94,11 @@ class Bot extends Model
         return $this->hasMany(KnowledgeVersion::class);
     }
 
+    public function shopifyShops(): HasMany
+    {
+        return $this->hasMany(ShopifyShop::class);
+    }
+
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);

@@ -33,7 +33,8 @@ type Delivery = {
     createdAt: string;
 };
 type Calendar = { available: boolean; email: string | null; connected: boolean; error: string | null; liveBooking: boolean };
-type Props = { integrations: Integration[]; deliveries: Delivery[]; sources: Record<string, string>; events: string[]; max: number; calendar: Calendar };
+type Shopify = { enabled: boolean; shops: { id: number; shop: string; installedAt: string | null; widgetOn: boolean; uninstalledAt: string | null }[] };
+type Props = { integrations: Integration[]; deliveries: Delivery[]; sources: Record<string, string>; events: string[]; max: number; calendar: Calendar; shopify: Shopify };
 
 const EVENT_LABEL: Record<string, string> = { 'booking.created': 'New booking', 'order.created': 'New order', 'callback.created': 'Callback request' };
 const STATUS_CHIP: Record<string, string> = { delivered: 'ok', failed: 'bad', pending: 'warn', retrying: 'warn' };
@@ -82,7 +83,57 @@ function CalendarCard({ calendar }: { calendar: Calendar }) {
     );
 }
 
-export default function Integrations({ integrations, deliveries, sources, events, max, calendar }: Props) {
+/** Shopify store connected through the Hamsukhan Shopify app: the call button is added to the store automatically. */
+function ShopifyCard({ shopify }: { shopify: Shopify }) {
+    const form = useForm({ shop: '' });
+
+    return (
+        <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-h">
+                <div>
+                    <h3>Shopify</h3>
+                    <p>Connect your Shopify store and the call button appears on it, no code to paste. Your store's domain is added to your allowed websites.</p>
+                </div>
+            </div>
+            <div className="card-b stack">
+                {shopify.shops.map((s) => (
+                    <div key={s.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                        <span style={{ flex: 1, minWidth: 200 }}>
+                            <b className="mono">{s.shop}</b>
+                            <span className="hint" style={{ display: 'block' }}>
+                                {s.uninstalledAt
+                                    ? `App removed in Shopify on ${fmtDate(s.uninstalledAt)}, connect again to re-add the button`
+                                    : `Connected ${s.installedAt ? fmtDate(s.installedAt) : ''} · ${s.widgetOn ? 'call button on' : 'call button not added'}`}
+                            </span>
+                        </span>
+                        <span className={'chip ' + (s.uninstalledAt ? 'bad' : s.widgetOn ? 'ok' : 'warn')}>{s.uninstalledAt ? 'Removed' : s.widgetOn ? 'Live' : 'No button'}</span>
+                        <button className="btn btn-ghost btn-sm" onClick={() => confirm(`Disconnect ${s.shop}? The call button is removed from the store.`) && router.delete(`/integrations/shopify/${s.id}`, { preserveScroll: true })}>
+                            Disconnect
+                        </button>
+                    </div>
+                ))}
+                <form
+                    style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        form.post('/integrations/shopify/connect');
+                    }}
+                >
+                    <div className="field" style={{ flex: 1, minWidth: 220 }}>
+                        <input className={'input mono' + (form.errors.shop ? ' bad' : '')} placeholder="mystore.myshopify.com" aria-label="Shopify store address" value={form.data.shop} onChange={(e) => form.setData('shop', e.target.value)} />
+                        <FieldError msg={form.errors.shop} />
+                    </div>
+                    <button className="btn btn-primary" disabled={form.processing || !form.data.shop}>
+                        <Icon name="plug" className="i i-sm" />
+                        Connect Shopify
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+export default function Integrations({ integrations, deliveries, sources, events, max, calendar, shopify }: Props) {
     const [editing, setEditing] = useState<Integration | 'new' | null>(null);
     const [showSecret, setShowSecret] = useState<number | null>(null);
     const [openDelivery, setOpenDelivery] = useState<Delivery | null>(null);
@@ -98,6 +149,7 @@ export default function Integrations({ integrations, deliveries, sources, events
         <>
             <Head title="Integrations" />
             <CalendarCard calendar={calendar} />
+            {shopify.enabled && <ShopifyCard shopify={shopify} />}
             <div className="hello">
                 <div>
                     <h2>Send bookings & orders to your software</h2>

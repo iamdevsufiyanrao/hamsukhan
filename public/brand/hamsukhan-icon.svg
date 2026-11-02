@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="hsg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF7A33"/><stop offset="1" stop-color="#C2410C"/></linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="19" fill="url(#hsg)"/>
+  <circle cx="32" cy="35.5" r="15.5" fill="#fff"/>
+  <ellipse cx="26.6" cy="32.4" rx="2.15" ry="2.7" fill="#1A1714"/>
+  <ellipse cx="37.4" cy="32.4" rx="2.15" ry="2.7" fill="#1A1714"/>
+  <circle cx="27.3" cy="31.4" r=".75" fill="#fff"/>
+  <circle cx="38.1" cy="31.4" r=".75" fill="#fff"/>
+  <circle cx="22.6" cy="38.3" r="2.5" fill="#FFC9A8"/>
+  <circle cx="41.4" cy="38.3" r="2.5" fill="#FFC9A8"/>
+  <path d="M26.6 39.2h10.8a5.4 5.4 0 0 1-10.8 0z" fill="#E8590C" stroke="#E8590C" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M29.4 43.2a3.6 2.2 0 0 1 5.2 0" fill="#FF9A66" opacity=".9"/>
+  <path d="M12.3 36.5a19.7 19.7 0 0 1 39.4 0" fill="none" stroke="#1A1714" stroke-width="4.4" stroke-linecap="round"/>
+  <rect x="8.4" y="31.6" width="8.2" height="13.2" rx="4.1" fill="#1A1714"/>
+  <rect x="47.4" y="31.6" width="8.2" height="13.2" rx="4.1" fill="#1A1714"/>
+  <path d="M51.5 44.5c0 6.3-4.4 9.6-11 9.6" fill="none" stroke="#1A1714" stroke-width="2.8" stroke-linecap="round"/>
+  <circle cx="39.6" cy="54.1" r="3.3" fill="#1A1714"/>
+  <circle cx="39.6" cy="54.1" r="1.35" fill="#FF7A33"/>
+</svg>

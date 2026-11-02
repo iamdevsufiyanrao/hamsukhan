@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import Icon from '@/components/Icon';
-import { PaymentModal } from '@/components/GlobalModals';
+import { PaymentModal, type Gateway } from '@/components/GlobalModals';
 import AppLayout from '@/layouts/AppLayout';
 import { fmtDate, fmtTime, pkr } from '@/lib/format';
 import type { PaymentAccount, Plan } from '@/types';
@@ -17,23 +17,39 @@ type Props = {
         users: number;
         minutesUsed: number;
         fairUseMinutes: number | null;
+        concurrentCalls: number | null;
         storesUsed: number;
         usersUsed: number;
     };
     plans: Plan[];
     payments: { id: number; plan: string; months: number; amountPkr: number; method: string; reference: string; status: 'pending' | 'approved' | 'rejected'; note: string | null; createdAt: string }[];
     accounts: PaymentAccount[];
+    gateways: Gateway[];
+    manualPayments: boolean;
+    checkoutResult: { status: 'pending' | 'approved' | 'rejected'; admin_note: string | null } | null;
 };
 
 const FEATURES = ['Unlimited calls (fair use)', 'Your own cloned voice', 'Bookings, orders and callbacks', 'Call recordings and transcripts', 'Works on any website and Shopify'];
 
-export default function Billing({ subscription: sub, plans, payments, accounts }: Props) {
+export default function Billing({ subscription: sub, plans, payments, accounts, gateways, manualPayments, checkoutResult }: Props) {
     const [paying, setPaying] = useState<Plan['id'] | null>(null);
     const nearLimit = sub.fairUseMinutes !== null && sub.minutesUsed >= sub.fairUseMinutes * 0.8;
 
     return (
         <>
             <Head title="Billing" />
+            {checkoutResult && (
+                <div className={'alert ' + (checkoutResult.status === 'approved' ? 'imp' : 'warn')}>
+                    <Icon name={checkoutResult.status === 'approved' ? 'check' : 'alert'} />
+                    <span className="grow">
+                        {checkoutResult.status === 'approved'
+                            ? 'Payment received, your plan is active. Thank you!'
+                            : checkoutResult.status === 'rejected'
+                              ? `The payment did not go through. ${checkoutResult.admin_note ?? ''}`
+                              : 'We are still waiting for the payment to be confirmed. Refresh this page in a minute.'}
+                    </span>
+                </div>
+            )}
             <div className="bill-grid" style={{ marginBottom: 16 }}>
                 <div className="card big-bal">
                     <small>Your plan</small>
@@ -74,9 +90,15 @@ export default function Billing({ subscription: sub, plans, payments, accounts }
                                 {sub.minutesUsed} · unlimited
                             </b>
                         </div>
+                        {sub.concurrentCalls !== null && (
+                            <div className="rate">
+                                <span>Calls at the same time</span>
+                                <b className="num">up to {sub.concurrentCalls}</b>
+                            </div>
+                        )}
                         <div className="rate">
                             <span>Payment methods</span>
-                            <b>JazzCash · Easypaisa · Bank transfer</b>
+                            <b>{[...gateways.map((g) => (g === 'jazzcash' ? 'JazzCash' : 'Easypaisa') + ' online'), ...(manualPayments ? ['JazzCash', 'Easypaisa', 'Bank transfer'] : [])].join(' · ')}</b>
                         </div>
                     </div>
                     {nearLimit && (
@@ -178,7 +200,7 @@ export default function Billing({ subscription: sub, plans, payments, accounts }
                 </div>
             </div>
 
-            <PaymentModal open={paying !== null} onClose={() => setPaying(null)} plans={plans} accounts={accounts} initialPlan={paying ?? 'basic'} />
+            <PaymentModal open={paying !== null} onClose={() => setPaying(null)} plans={plans} accounts={accounts} initialPlan={paying ?? 'basic'} gateways={gateways} manual={manualPayments} />
         </>
     );
 }

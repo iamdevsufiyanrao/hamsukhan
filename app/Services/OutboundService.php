@@ -61,6 +61,11 @@ class OutboundService
                         min(180, $this->affordable($bot)), ['bookingId' => $b->id, 'reminder' => true]);
                     $placed++;
                 } catch (\Throwable $e) {
+                    if ($e->getCode() === self::BUSY) {
+                        $b->forceFill(['reminder_called_at' => null])->save(); // all lines busy: try again on the next run
+
+                        return;
+                    }
                     Log::warning('[outbound] reminder failed', ['booking' => $b->id, 'error' => $e->getMessage()]);
                 }
             });
@@ -101,10 +106,13 @@ class OutboundService
                     $placed++;
                 } catch (RuntimeException $e) {
                     $blocked = $e->getCode() === self::BLOCKED;
-                    $contact->update(['status' => $blocked ? 'pending' : 'failed', 'error' => mb_strimwidth($e->getMessage(), 0, 300, '…'), 'called_at' => null]);
+                    $busy = $e->getCode() === self::BUSY;
+                    $contact->update(['status' => $blocked || $busy ? 'pending' : 'failed', 'error' => $busy ? null : mb_strimwidth($e->getMessage(), 0, 300, '…'), 'called_at' => null]);
                     if ($blocked) {
                         $c->update(['status' => 'paused']);
-                        break;
+                    }
+                    if ($blocked || $busy) {
+                        break; // busy: the next run (5 minutes) continues
                     }
                 }
             }
@@ -116,12 +124,20 @@ class OutboundService
     /** Exception code for "the plan doesn't allow a call now" (a campaign pauses instead of failing the contact). */
     public const BLOCKED = 402;
 
+    /** Exception code for "all lines are busy" (the call is simply tried again later). */
+    public const BUSY = 429;
+
+    /** Max length for an outbound call, after checking the plan and the concurrent-call limit; holds a line for it. */
     private function affordable(\App\Models\Bot $bot): int
     {
         $seconds = $this->subscriptions->maxCallSeconds($bot);
         if ($seconds < 60) {
             throw new RuntimeException(SubscriptionService::blockMessage($this->subscriptions->blockReason($bot) ?? 'fair_use'), self::BLOCKED);
         }
+        if ($this->subscriptions->busyReason($bot)) {
+            throw new RuntimeException(SubscriptionService::blockMessage('busy'), self::BUSY);
+        }
+        $this->subscriptions->reserveLine($bot);
 
         return $seconds;
     }

@@ -1,6 +1,7 @@
 /*!
  * Hamsukhan call widget.
  * <script src="https://YOUR-DOMAIN/widget.js" data-bot="BOT_PUBLIC_KEY" defer></script>
+ * or widget.js?bot=BOT_PUBLIC_KEY (Shopify script tags can't carry data attributes).
  * Renders the call button and starts a Vapi web call. Only the Vapi PUBLIC key ever reaches the browser.
  * Everything lives in a Shadow DOM, so the host site's CSS can't break the widget and ours can't leak out.
  * The voice SDK is only downloaded after the visitor agrees to start a call.
@@ -10,8 +11,9 @@
     if (!script || window.__hamsukhan) return;
     window.__hamsukhan = true;
 
-    var key = script.getAttribute('data-bot');
-    var base = new URL(script.src).origin;
+    var src = new URL(script.src);
+    var key = script.getAttribute('data-bot') || src.searchParams.get('bot');
+    var base = src.origin;
     if (!key) return console.warn('[Hamsukhan] data-bot attribute missing');
 
     var SDK = 'https://esm.sh/@vapi-ai/web@3.0.0'; // exact version (v2 pulled an unsupported daily-js)
@@ -207,7 +209,7 @@
         starting = true;
         set('loading');
         post('/start').then(function (res) {
-            if (!res.ok || !res.body.ok) return fail(res.body.reason === 'no_balance' || res.body.reason === 'inactive' ? 'The assistant is not available right now.' : (res.body.message || 'Could not connect.'));
+            if (!res.ok || !res.body.ok) return fail(res.body.reason === 'busy' ? 'All our lines are busy right now.' : ['no_balance', 'no_plan', 'store_limit', 'fair_use', 'inactive'].indexOf(res.body.reason) >= 0 ? 'The assistant is not available right now.' : (res.body.message || 'Could not connect.'));
             if (res.body.simulated || !res.body.vapiPublicKey || !res.body.assistantId) return fail('Voice calls are not switched on yet.');
             return import(SDK).then(function (mod) {
                 var Vapi = mod.default;

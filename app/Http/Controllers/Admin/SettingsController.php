@@ -54,6 +54,7 @@ class SettingsController extends Controller
                     'pending' => IntegrationDelivery::where('status', 'pending')->count(),
                 ],
                 'packageVersion' => '1.0.0',
+                'shopifyShops' => \App\Models\ShopifyShop::whereNull('uninstalled_at')->count(),
             ],
             'system' => $this->system(),
         ]);
@@ -77,10 +78,13 @@ class SettingsController extends Controller
             };
         }
         $rules['seo_ga_id'] = ['nullable', 'regex:/^(G|UA|GT)-[A-Z0-9-]{4,20}$/i'];
+        $rules['intro_youtube'] = ['nullable', 'url', 'max:300', 'regex:~^https://(www\.)?(youtube\.com/(watch\?v=|shorts/|embed/)|youtu\.be/)[\w-]{6,}~'];
         $rules['basic_price_pkr'] = $rules['business_price_pkr'] = ['nullable', 'integer', 'min:100', 'max:1000000'];
         // 0 = no fair-use limit (truly unlimited).
         $rules['basic_fair_use_minutes'] = $rules['business_fair_use_minutes'] = ['nullable', 'integer', 'min:0', 'max:100000'];
         $rules['trial_days'] = ['nullable', 'integer', 'min:0', 'max:60'];
+        $rules['basic_concurrent_calls'] = $rules['business_concurrent_calls'] = ['nullable', 'integer', 'min:1', 'max:500'];
+        $rules['platform_max_calls'] = ['nullable', 'integer', 'min:0', 'max:5000'];
         $rules['connectors_max_per_bot'] = ['nullable', 'integer', 'min:1', 'max:50'];
         $rules['mail_mailer'] = ['nullable', 'in:smtp,log'];
         $rules['mail_scheme'] = ['nullable', 'in:smtp,smtps'];

@@ -8,8 +8,63 @@ return [
     | because every minute still costs us Vapi + ElevenLabs + LLM. The super admin can change all of it.
     */
     'plans' => [
-        'basic' => ['name' => 'Basic', 'price_pkr' => (int) env('HAMSUKHAN_BASIC_PRICE', 3000), 'stores' => 1, 'users' => 1, 'fair_use_minutes' => (int) env('HAMSUKHAN_BASIC_MINUTES', 1500) ?: null],
-        'business' => ['name' => 'Business', 'price_pkr' => (int) env('HAMSUKHAN_BUSINESS_PRICE', 25000), 'stores' => 5, 'users' => 5, 'fair_use_minutes' => (int) env('HAMSUKHAN_BUSINESS_MINUTES', 10000) ?: null],
+        'basic' => ['name' => 'Basic', 'price_pkr' => (int) env('HAMSUKHAN_BASIC_PRICE', 3000), 'stores' => 1, 'users' => 1, 'fair_use_minutes' => (int) env('HAMSUKHAN_BASIC_MINUTES', 1500) ?: null, 'concurrent_calls' => 2],
+        'business' => ['name' => 'Business', 'price_pkr' => (int) env('HAMSUKHAN_BUSINESS_PRICE', 25000), 'stores' => 5, 'users' => 5, 'fair_use_minutes' => (int) env('HAMSUKHAN_BUSINESS_MINUTES', 10000) ?: null, 'concurrent_calls' => 10],
+    ],
+
+    /*
+    | How many calls may run at the same time. Off by default (then only Vapi's own account limit applies).
+    | On: each account is held to its plan's `concurrent_calls` (all its stores together), and `platform_max`
+    | (0 = none) caps the whole platform, e.g. at the number of lines bought on Vapi. A call over the limit is
+    | refused with "busy" and the visitor gets the callback form.
+    */
+    'concurrency' => [
+        'enabled' => (bool) env('HAMSUKHAN_CONCURRENCY_ENABLED', false),
+        'platform_max' => (int) env('HAMSUKHAN_PLATFORM_MAX_CALLS', 0),
+    ],
+
+    /*
+    | Manual payments: the owner sends money to the accounts above and uploads a screenshot for review.
+    | The super admin can switch this off once an online gateway (JazzCash / Easypaisa merchant) is connected.
+    */
+    'manual_payments' => (bool) env('HAMSUKHAN_MANUAL_PAYMENTS', true),
+
+    /*
+    | Easypaisa online checkout ("Easypay" hosted checkout, merchant account from easypaisa.com.pk).
+    | The browser result is never trusted: every payment is confirmed with Easypay's inquire-transaction API.
+    */
+    'easypaisa' => [
+        'enabled' => (bool) env('EASYPAISA_ENABLED', false),
+        'sandbox' => (bool) env('EASYPAISA_SANDBOX', true),
+        'store_id' => env('EASYPAISA_STORE_ID'),
+        'hash_key' => env('EASYPAISA_HASH_KEY'),
+        'username' => env('EASYPAISA_USERNAME'),
+        'password' => env('EASYPAISA_PASSWORD'),
+        'account_num' => env('EASYPAISA_ACCOUNT_NUM'),
+    ],
+
+    /*
+    | JazzCash online checkout (hosted page redirection, merchant account from jazzcash.com.pk).
+    | When enabled, owners can pay for a plan online and it switches on right away; manual payments keep working.
+    */
+    'jazzcash' => [
+        'enabled' => (bool) env('JAZZCASH_ENABLED', false),
+        'sandbox' => (bool) env('JAZZCASH_SANDBOX', true),
+        'merchant_id' => env('JAZZCASH_MERCHANT_ID'),
+        'password' => env('JAZZCASH_PASSWORD'),
+        'integrity_salt' => env('JAZZCASH_INTEGRITY_SALT'),
+    ],
+
+    /*
+    | Shopify app (partners.shopify.com → Apps → your app → Client credentials). When enabled with keys,
+    | owners connect their Shopify store from Integrations and the call widget is added to the store for them.
+    */
+    'shopify' => [
+        'enabled' => (bool) env('SHOPIFY_ENABLED', false),
+        'client_id' => env('SHOPIFY_CLIENT_ID'),
+        'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
+        'scopes' => 'write_script_tags',
+        'api_version' => env('SHOPIFY_API_VERSION', '2025-07'),
     ],
     // Days of free Basic plan for a new sign-up (0 = none, they pay before the first call).
     'trial_days' => (int) env('HAMSUKHAN_TRIAL_DAYS', 0),
@@ -102,6 +157,13 @@ return [
         'alert_email' => env('HAMSUKHAN_ALERT_EMAIL'),
         'allow_signups' => true,
         'announcement' => null,
+        // Brand media, uploaded by the super admin (Settings → Site). Empty = the brand-kit defaults in public/brand.
+        'logo_url' => null,
+        'intro_enabled' => true,
+        'intro_video' => null,
+        'intro_poster' => null,
+        'intro_youtube' => null,
+        'intro_vertical' => true,
         'terms_url' => null,
         'privacy_url' => null,
     ],

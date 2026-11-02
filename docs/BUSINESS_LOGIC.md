@@ -196,3 +196,17 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - **Team** (`users.owner_id`, `team_role`): owner adds members up to the plan's users (Basic: none, Business: 4); the password-reset email is the invite. Members use the owner's stores, voices, calendar and plan (`User::account()`) and can switch stores; `EnsureTeamPermission`: admin = all but billing and team, operator = view + leads/AI callback/live calls/test calls, viewer = view only. Owner suspended ⇒ members locked out. A member deleting "their account" deletes only their login. Admin's account list hides members.
 - **Knowledge history** (`knowledge_versions`, last 50): greeting/instructions/quick facts are snapshotted before every change; restore keeps the current state as a version too.
 - **Campaigns** (`campaigns`, `campaign_contacts`): owner pastes up to 500 contacts and must confirm consent. Every 5 minutes running campaigns call the next contacts (`per_run` at a time) only inside opening hours (10:00–20:00 PKT without hours). Plan inactive or fair use used up ⇒ campaign pauses. The end-of-call report marks the contact done/failed (scoped to the bot).
+
+## 16. Online payments, concurrency, Shopify, brand media (2026-11-03)
+- **Gateways** (Admin → Settings → Billing): JazzCash (page redirection, `pp_SecureHash` HMAC-SHA256 with the integrity salt, verified on return)
+  and Easypaisa Easypay (AES-128-ECB `merchantHashedReq`; every result is confirmed with the inquire-transaction API).
+  `POST /billing/checkout` records a pending payment with `gateway`, the gateway's page takes the money, a verified paid answer
+  with the exact amount activates the plan (`SubscriptionService::completeOnlinePayment`, once). Unfinished online payments
+  are not in the admin's review queue (`TopUp::awaitingReview`).
+- **Manual payments** (`manual_payments`): the admin can switch them off, but only takes effect while a gateway is connected.
+- **Calls at the same time** (`concurrency.enabled`, plan `concurrent_calls`, `concurrency.platform_max`): live calls
+  (`live_calls`, < 20 min old) + calls just starting (45 s cache hold) per account; over the limit ⇒ 429 `busy`, widget offers
+  the callback form; reminders/campaigns retry on the next run.
+- **Shopify app** (Admin → Plugins): OAuth connect from Integrations, ScriptTag `widget.js?bot=KEY`, `app/uninstalled` + GDPR webhooks.
+- **Brand media** (Admin → Site): logo, intro video (file or YouTube) and cover on the public disk; defaults in `public/brand`.
+  Needs `php artisan storage:link` on the host.

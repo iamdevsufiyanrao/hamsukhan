@@ -81,7 +81,8 @@ class CaptureFields
     {
         $props = [];
         foreach ($fields as $f) {
-            $desc = $f['label'].($f['hint'] ? ': '.$f['hint'] : '').($f['required'] ? ' (ask the caller for this)' : '');
+            // Fields saved before hints existed have no 'hint' / 'required' keys.
+            $desc = $f['label'].(($f['hint'] ?? null) ? ': '.$f['hint'] : '').(($f['required'] ?? false) ? ' (ask the caller for this)' : '');
             $props[$f['key']] = match ($f['type']) {
                 'number' => ['type' => 'number', 'description' => $desc],
                 'list' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => $desc],

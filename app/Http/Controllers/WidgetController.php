@@ -54,9 +54,14 @@ class WidgetController extends Controller
             return $this->cors(response()->json(['ok' => false, 'reason' => $reason, 'message' => SubscriptionService::blockMessage($reason)], 402));
         }
 
+        if ($subscriptions->busyReason($bot)) {
+            return $this->cors(response()->json(['ok' => false, 'reason' => 'busy', 'message' => SubscriptionService::blockMessage('busy')], 429));
+        }
+
         if ($error = $this->ensureLive($bot, $vapi)) {
             return $this->cors(response()->json(['ok' => false, 'reason' => 'not_synced', 'message' => $error], 503));
         }
+        $subscriptions->reserveLine($bot);
 
         return $this->cors(response()->json([
             'ok' => true,

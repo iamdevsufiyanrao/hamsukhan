@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -9,7 +10,7 @@ class TopUp extends Model
 {
     public const METHODS = ['jazzcash', 'easypaisa', 'bank'];
 
-    protected $fillable = ['plan', 'months', 'amount_usd', 'amount_pkr', 'method', 'reference', 'proof_path', 'status', 'reviewed_by', 'reviewed_at', 'admin_note'];
+    protected $fillable = ['plan', 'months', 'gateway', 'gateway_response', 'amount_usd', 'amount_pkr', 'method', 'reference', 'proof_path', 'status', 'reviewed_by', 'reviewed_at', 'admin_note'];
 
     protected function casts(): array
     {
@@ -17,7 +18,14 @@ class TopUp extends Model
             'amount_usd' => 'decimal:2',
             'amount_pkr' => 'decimal:2',
             'reviewed_at' => 'datetime',
+            'gateway_response' => 'array',
         ];
+    }
+
+    /** Manual payments an admin still has to check (an unfinished online checkout is not one of them). */
+    public function scopeAwaitingReview(Builder $query): void
+    {
+        $query->where('status', 'pending')->whereNull('gateway');
     }
 
     public function user(): BelongsTo
@@ -37,6 +45,10 @@ class TopUp extends Model
 
     public function methodLabel(): string
     {
+        if ($this->gateway) {
+            return ['jazzcash' => 'JazzCash online', 'easypaisa' => 'Easypaisa online'][$this->gateway] ?? ucfirst($this->gateway).' online';
+        }
+
         return config("hamsukhan.payment_accounts.{$this->method}.label", ucfirst($this->method));
     }
 }

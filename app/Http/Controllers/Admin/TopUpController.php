@@ -23,7 +23,7 @@ class TopUpController extends Controller
 
         return Inertia::render('Admin/TopUps', [
             'filter' => $status,
-            'topUps' => TopUp::with('user:id,name,email', 'reviewer:id,name')->where('status', $status)->latest()->limit(100)->get()
+            'topUps' => TopUp::with('user:id,name,email', 'reviewer:id,name')->where('status', $status)->when($status === 'pending', fn ($q) => $q->whereNull('gateway'))->latest()->limit(100)->get()
                 ->map(fn (TopUp $t) => [
                     'id' => $t->id,
                     'user' => ['name' => $t->user->name, 'email' => $t->user->email],
@@ -38,7 +38,7 @@ class TopUpController extends Controller
                     'reviewer' => $t->reviewer?->name,
                     'createdAt' => $t->created_at->toIso8601String(),
                 ]),
-            'counts' => TopUp::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
+            'counts' => TopUp::where(fn ($q) => $q->where('status', '!=', 'pending')->orWhereNull('gateway'))->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
         ]);
     }
 

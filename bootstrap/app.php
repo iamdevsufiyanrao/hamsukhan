@@ -22,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);
+        // Easypaisa's return hops come from easypay.easypaisa.com.pk (see EasypaisaController).
+        $middleware->validateCsrfTokens(except: ['payments/easypaisa/*']);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/dashboard');
     })

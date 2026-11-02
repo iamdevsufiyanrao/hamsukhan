@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\Bot;
 use App\Models\Call;
+use App\Models\LiveCall;
 use App\Models\TopUp;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -64,12 +66,75 @@ class SubscriptionService
         return max(0, $seconds);
     }
 
+    /** A call that never sent "ended" (missed webhook) stops counting after this long; no call lasts longer (max 15 min). */
+    private const LIVE_CALL_TTL_MINUTES = 20;
+
+    /** Calls just started that Vapi hasn't reported "in-progress" for yet still count for this many seconds. */
+    private const STARTING_TTL_SECONDS = 45;
+
+    /** Calls running now on the account's stores (reported in-progress, plus ones just starting). */
+    public function activeCalls(User $account): int
+    {
+        $live = LiveCall::whereIn('bot_id', Bot::where('user_id', $account->id)->select('id'))
+            ->where('started_at', '>=', now()->subMinutes(self::LIVE_CALL_TTL_MINUTES))->count();
+
+        return $live + count($this->starting("account:{$account->id}"));
+    }
+
+    /** Calls running now on the whole platform. */
+    public function platformActiveCalls(): int
+    {
+        return LiveCall::where('started_at', '>=', now()->subMinutes(self::LIVE_CALL_TTL_MINUTES))->count() + count($this->starting('platform'));
+    }
+
+    /**
+     * 'busy' when the concurrent-call limit is on and the account (its plan's `concurrent_calls`)
+     * or the platform (`concurrency.platform_max`) already has that many calls running; else null.
+     */
+    public function busyReason(Bot $bot): ?string
+    {
+        if (! config('hamsukhan.concurrency.enabled')) {
+            return null;
+        }
+        $limit = (int) ($bot->user->planLimits()['concurrent_calls'] ?? 0);
+        if ($limit > 0 && $this->activeCalls($bot->user) >= $limit) {
+            return 'busy';
+        }
+        $platform = (int) config('hamsukhan.concurrency.platform_max');
+
+        return $platform > 0 && $this->platformActiveCalls() >= $platform ? 'busy' : null;
+    }
+
+    /** Holds a line for a call that is starting, until Vapi reports it in progress (see activeCalls). */
+    public function reserveLine(Bot $bot): void
+    {
+        if (! config('hamsukhan.concurrency.enabled')) {
+            return;
+        }
+        foreach (["account:{$bot->user_id}", 'platform'] as $scope) {
+            Cache::lock("hamsukhan:starting:{$scope}:lock", 5)->block(3, function () use ($scope) {
+                $list = $this->starting($scope);
+                $list[] = now()->getTimestamp();
+                Cache::put("hamsukhan:starting:{$scope}", $list, self::STARTING_TTL_SECONDS);
+            });
+        }
+    }
+
+    /** @return list<int> start times (unix) of calls still starting */
+    private function starting(string $scope): array
+    {
+        $since = now()->getTimestamp() - self::STARTING_TTL_SECONDS;
+
+        return array_values(array_filter((array) Cache::get("hamsukhan:starting:{$scope}", []), fn ($t) => $t >= $since));
+    }
+
     public static function blockMessage(string $reason): string
     {
         return [
             'no_plan' => 'The monthly plan is not active. Renew it from the Billing page.',
             'store_limit' => 'Your plan covers fewer stores. Upgrade to Business to switch this store on.',
             'fair_use' => "This month's fair-use limit is reached. It resets on the 1st, or contact support.",
+            'busy' => 'All lines are busy right now. Please try again in a few minutes.',
         ][$reason] ?? 'This assistant is not available right now.';
     }
 
@@ -113,6 +178,26 @@ class SubscriptionService
         });
     }
 
+    /**
+     * The gateway's signed answer for an online payment: paid ⇒ the plan switches on now; else the payment is closed
+     * with the gateway's reason. Runs once per payment (a repeated answer is ignored). Returns the payment.
+     */
+    public function completeOnlinePayment(TopUp $payment, bool $paid, string $note, array $response): TopUp
+    {
+        return DB::transaction(function () use ($payment, $paid, $note, $response) {
+            $payment = TopUp::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+            if ($payment->status !== 'pending') {
+                return $payment;
+            }
+            $payment->update(['status' => $paid ? 'approved' : 'rejected', 'reviewed_at' => now(), 'admin_note' => mb_substr($note, 0, 190), 'gateway_response' => $response]);
+            if ($paid) {
+                $this->activate($payment->user, $payment->plan, $payment->months);
+            }
+
+            return $payment;
+        });
+    }
+
     public function rejectPayment(TopUp $payment, User $admin, ?string $note = null): void
     {
         DB::transaction(function () use ($payment, $admin, $note) {
@@ -147,6 +232,8 @@ class SubscriptionService
             'daysLeft' => $plan ? (int) ceil(now()->diffInDays($account->plan_expires_at, true)) : 0,
             'stores' => $limits['stores'],
             'users' => $limits['users'],
+            // How many calls can run at once (null = the limit is switched off).
+            'concurrentCalls' => config('hamsukhan.concurrency.enabled') ? (int) ($limits['concurrent_calls'] ?? 0) : null,
             'minutesUsed' => (int) round($this->usedSecondsThisMonth($account) / 60),
             'fairUseMinutes' => $limits['fair_use_minutes'],
         ];

@@ -38,12 +38,18 @@ class BillingController extends Controller
                 'createdAt' => $t->created_at->toIso8601String(),
             ]),
             'accounts' => collect(config('hamsukhan.payment_accounts'))->map(fn ($a, $k) => $a + ['id' => $k])->values(),
+            // Connected gateways; manual payments stay available whenever none is connected, so nobody is locked out.
+            'gateways' => array_keys(array_filter(CheckoutController::gateways())),
+            'manualPayments' => self::manualAllowed(),
+            // Back from JazzCash: how that payment ended (the return lands here without our session, see JazzCashController).
+            'checkoutResult' => ($ref = $request->query('paid')) ? $user->topUps()->where('reference', $ref)->whereNotNull('gateway')->first()?->only('status', 'admin_note') : null,
         ]);
     }
 
     /** Manual payment: the owner already sent the plan price and submits the reference + screenshot for review. */
     public function storePayment(Request $request, SubscriptionService $subscriptions): RedirectResponse
     {
+        abort_unless(self::manualAllowed(), 403, 'Please pay online, manual payments are switched off.');
         $user = $request->user();
         $data = $request->validate([
             'plan' => ['required', Rule::in(array_keys($subscriptions->plans()))],
@@ -53,7 +59,7 @@ class BillingController extends Controller
             'proof' => ['required', 'image', 'max:4096'],
         ]);
 
-        if ($user->topUps()->where('status', 'pending')->count() >= 3) {
+        if ($user->topUps()->awaitingReview()->count() >= 3) {
             return back()->withErrors(['reference' => 'You already have 3 payments waiting for review.']);
         }
 
@@ -67,5 +73,11 @@ class BillingController extends Controller
         ]);
 
         return back()->with('success', 'Payment submitted, your plan switches on once we verify it (usually within a few hours).');
+    }
+
+    /** Manual payments: on unless the super admin switched them off *and* an online gateway is connected. */
+    public static function manualAllowed(): bool
+    {
+        return (bool) config('hamsukhan.manual_payments') || ! array_filter(CheckoutController::gateways());
     }
 }

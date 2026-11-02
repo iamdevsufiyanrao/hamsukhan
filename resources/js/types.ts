@@ -30,7 +30,7 @@ export type SharedProps = {
         impersonator: { name: string } | null;
     } | null;
     flash: { success: string | null; error: string | null };
-    site: { name: string; announcement: string | null; allowSignups: boolean; termsUrl: string | null; privacyUrl: string | null; supportEmail: string | null; supportPhone: string | null; whatsapp: string | null; demoBotKey: string | null };
+    site: { name: string; announcement: string | null; allowSignups: boolean; termsUrl: string | null; privacyUrl: string | null; supportEmail: string | null; supportPhone: string | null; whatsapp: string | null; demoBotKey: string | null; logoUrl: string | null; introVideo: IntroVideo | null };
     config: {
         plans: Plan[];
         trialDays: number;
@@ -41,3 +41,6 @@ export type SharedProps = {
 export type Plan = { id: 'basic' | 'business'; name: string; pricePkr: number; stores: number; users: number };
 
 export type PaymentAccount = { id: 'jazzcash' | 'easypaisa' | 'bank'; label: string; title: string; number: string };
+
+/** The intro video on the home page: an uploaded file (src + optional poster) or a YouTube link (youtubeId). */
+export type IntroVideo = { src: string | null; poster: string | null; youtubeId: string | null; vertical: boolean };

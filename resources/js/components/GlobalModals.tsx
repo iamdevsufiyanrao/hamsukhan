@@ -171,19 +171,33 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
 }
 
 /** Manual plan payment: pick a plan and how many months, pay to our JazzCash/Easypaisa/bank account, then submit the reference + screenshot. */
-export function PaymentModal({ open, onClose, plans, accounts, initialPlan }: { open: boolean; onClose: () => void; plans: Plan[]; accounts: PaymentAccount[]; initialPlan: Plan['id'] }) {
+export type Gateway = 'jazzcash' | 'easypaisa';
+const GATEWAY_LABEL: Record<Gateway, string> = { jazzcash: 'JazzCash', easypaisa: 'Easypaisa' };
+
+/**
+ * Pay for a plan. Online (connected JazzCash / Easypaisa merchant): the gateway's own checkout page takes the payment
+ * and the plan switches on as soon as it is paid. Manual (when the super admin keeps it on): send to our account and
+ * upload the receipt for review.
+ */
+export function PaymentModal({ open, onClose, plans, accounts, initialPlan, gateways = [], manual = true }: { open: boolean; onClose: () => void; plans: Plan[]; accounts: PaymentAccount[]; initialPlan: Plan['id']; gateways?: Gateway[]; manual?: boolean }) {
     const form = useForm<{ plan: Plan['id']; months: number; method: string; reference: string; proof: File | null }>({ plan: initialPlan, months: 1, method: 'jazzcash', reference: '', proof: null });
+    const [going, setGoing] = useState<Gateway | null>(null);
     useEffect(() => {
         if (open) form.setData('plan', initialPlan);
     }, [open, initialPlan]); // eslint-disable-line react-hooks/exhaustive-deps
     const plan = plans.find((p) => p.id === form.data.plan) ?? plans[0];
     const total = plan.pricePkr * form.data.months;
     const account = accounts.find((a) => a.id === form.data.method) ?? accounts[0];
+    const online = gateways.length > 0;
 
     const close = () => {
         form.reset();
         form.clearErrors();
         onClose();
+    };
+    const payOnline = (gateway: Gateway) => {
+        setGoing(gateway);
+        router.post('/billing/checkout', { plan: form.data.plan, months: form.data.months, gateway }, { onFinish: () => setGoing(null) });
     };
     const submit = () =>
         form.post('/billing/payments', {
@@ -196,16 +210,18 @@ export function PaymentModal({ open, onClose, plans, accounts, initialPlan }: { 
         <Modal
             open={open}
             onClose={close}
-            title="Pay for your plan"
-            desc="Send the payment, then submit the transaction ID. Your plan switches on once we verify it."
+            title="Get your plan"
+            desc={online ? 'Pick the plan and months, then pay on the secure checkout page. Your plan switches on right away.' : 'Send the payment, then submit the transaction ID. Your plan switches on once we verify it.'}
             footer={
                 <>
                     <button className="btn btn-ghost" onClick={close}>
                         Cancel
                     </button>
-                    <button className="btn btn-primary" disabled={form.processing || !form.data.reference || !form.data.proof} onClick={submit}>
-                        {form.processing ? 'Submitting…' : 'Submit payment'}
-                    </button>
+                    {manual && (
+                        <button className={'btn ' + (online ? 'btn-ghost' : 'btn-primary')} disabled={form.processing || !form.data.reference || !form.data.proof} onClick={submit}>
+                            {form.processing ? 'Submitting…' : 'Submit payment'}
+                        </button>
+                    )}
                 </>
             }
         >
@@ -229,30 +245,50 @@ export function PaymentModal({ open, onClose, plans, accounts, initialPlan }: { 
             </div>
             <FieldError msg={form.errors.months} />
 
-            <div className="section-t">Pay with</div>
-            <div className="acct">
-                {accounts.map((a) => (
-                    <button key={a.id} type="button" className={a.id === form.data.method ? 'on' : ''} onClick={() => form.setData('method', a.id)}>
-                        <b>{a.label}</b>
-                        {a.id === 'bank' ? 'IBAN' : 'Mobile account'}
-                    </button>
-                ))}
-            </div>
-            <div className="pay-box">
-                Send <b>{pkr(total)}</b> ({plan.name} × {form.data.months} month{form.data.months > 1 ? 's' : ''}) to <b>{account.title}</b>
-                <div className="mono">{account.number}</div>
-            </div>
+            {online && (
+                <div className="pay-box" style={{ display: 'grid', gap: 10 }}>
+                    <span>
+                        Total <b>{pkr(total)}</b> ({plan.name} × {form.data.months} month{form.data.months > 1 ? 's' : ''})
+                    </span>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {gateways.map((g) => (
+                            <button key={g} type="button" className="btn btn-primary" disabled={!!going} onClick={() => payOnline(g)}>
+                                <Icon name={going === g ? 'loader' : 'shield'} className={going === g ? 'i i-sm spin' : 'i i-sm'} />
+                                {going === g ? 'Opening checkout…' : `Pay with ${GATEWAY_LABEL[g]}`}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
-            <div className="field" style={{ marginBottom: 14 }}>
-                <label htmlFor="ref">Transaction ID</label>
-                <input id="ref" className={'input mono' + (form.errors.reference ? ' bad' : '')} placeholder="e.g. 88213409" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} />
-                <FieldError msg={form.errors.reference} />
-            </div>
-            <div className="field">
-                <label htmlFor="proof">Payment screenshot</label>
-                <input id="proof" className="input" style={{ paddingTop: 9 }} type="file" accept="image/*" onChange={(e) => form.setData('proof', e.target.files?.[0] ?? null)} />
-                <FieldError msg={form.errors.proof} />
-            </div>
+            {manual && (
+                <>
+                    <div className="section-t">{online ? 'Or send it yourself and upload the receipt' : 'Pay with'}</div>
+                    <div className="acct">
+                        {accounts.map((a) => (
+                            <button key={a.id} type="button" className={a.id === form.data.method ? 'on' : ''} onClick={() => form.setData('method', a.id)}>
+                                <b>{a.label}</b>
+                                {a.id === 'bank' ? 'IBAN' : 'Mobile account'}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="pay-box">
+                        Send <b>{pkr(total)}</b> ({plan.name} × {form.data.months} month{form.data.months > 1 ? 's' : ''}) to <b>{account.title}</b>
+                        <div className="mono">{account.number}</div>
+                    </div>
+
+                    <div className="field" style={{ marginBottom: 14 }}>
+                        <label htmlFor="ref">Transaction ID</label>
+                        <input id="ref" className={'input mono' + (form.errors.reference ? ' bad' : '')} placeholder="e.g. 88213409" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} />
+                        <FieldError msg={form.errors.reference} />
+                    </div>
+                    <div className="field">
+                        <label htmlFor="proof">Payment screenshot</label>
+                        <input id="proof" className="input" style={{ paddingTop: 9 }} type="file" accept="image/*" onChange={(e) => form.setData('proof', e.target.files?.[0] ?? null)} />
+                        <FieldError msg={form.errors.proof} />
+                    </div>
+                </>
+            )}
         </Modal>
     );
 }

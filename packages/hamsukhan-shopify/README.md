@@ -1,8 +1,14 @@
 # Hamsukhan for Shopify
 
-A Shopify app with one **theme app embed** that adds the Hamsukhan call button to a store.
-It loads the same `widget.js` as the plain website snippet, so calls, bookings and settings all work the same way.
-The app asks for no access scopes and reads no store data.
+A Shopify app that adds the Hamsukhan call button to a store, two ways:
+
+- **Connect (recommended):** the owner clicks *Connect Shopify* in Hamsukhan → Integrations (or opens the app in
+  Shopify admin). After Shopify's OAuth, Hamsukhan adds `widget.js?bot=KEY` to the storefront as a ScriptTag, so
+  nothing has to be pasted. Scope: `write_script_tags` only, no store data is read. Offline tokens don't expire, so the
+  store stays connected until the app is uninstalled (`app/uninstalled` webhook marks it).
+- **Theme app embed:** the merchant turns the embed on in the theme editor and pastes the bot key.
+
+Both load the same `widget.js` as the plain website snippet, so calls, bookings and settings work the same way.
 
 ```
 shopify.app.toml                                  app config (client_id only, no secrets)
@@ -23,7 +29,18 @@ extensions/hamsukhan-widget/locales/en.default.json
    it in the Shopify App Store later (needs app review).
 4. To try it on a development store first: `npx shopify app dev`.
 
-## What the merchant does
+## Switch it on in Hamsukhan
+Super admin → Settings → **Plugins → Shopify app**: tick *Customers can connect Shopify stores*, paste the app's
+**Client ID** and **Client secret** (Partner dashboard → your app → Client credentials), save. Copy the three URLs shown
+there into the Partner dashboard (they match `shopify.app.toml`):
+
+| Partner dashboard field | URL |
+|---|---|
+| App URL | `https://hamsukhan.techvocalz.com/shopify/install` |
+| Allowed redirection URL | `https://hamsukhan.techvocalz.com/integrations/shopify/callback` |
+| Privacy webhooks (customer data request, customer redact, shop redact) | `https://hamsukhan.techvocalz.com/api/shopify/webhooks` |
+
+## What the merchant does (theme app embed)
 1. Install the app.
 2. **Online Store → Themes → Customize → App embeds** (left sidebar, puzzle icon) → turn on **Hamsukhan voice assistant**.
 3. Paste the bot key from Hamsukhan (**Bot Studio → Embed**) and save.

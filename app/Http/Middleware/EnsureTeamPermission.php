@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureTeamPermission
 {
-    private const OWNER_ONLY = ['billing', 'payments.store', 'stores.store', 'stores.destroy'];
+    private const OWNER_ONLY = ['billing', 'payments.store', 'payments.checkout', 'jazzcash.redirect', 'easypaisa.redirect', 'stores.store', 'stores.destroy'];
 
     private const ANY_ROLE = ['stores.switch'];
 

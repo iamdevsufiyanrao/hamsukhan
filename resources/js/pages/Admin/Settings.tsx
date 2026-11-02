@@ -15,6 +15,7 @@ type Props = {
         connectors: { id: number; name: string; kind: string; url: string; isActive: boolean; lastStatus: string | null; lastDeliveryAt: string | null; account: { id: number; name: string; business: string | null } | null }[];
         stats: { total: number; active: number; delivered24h: number; failed24h: number; pending: number };
         packageVersion: string;
+        shopifyShops: number;
     };
     system: {
         cron: { lastRun: string | null; healthy: boolean; line: string; jobs: { name: string; command: string; every: string }[] };
@@ -127,6 +128,7 @@ function Card({ title, desc, children, form, save }: { title: string; desc: stri
 function SiteTab({ values }: { values: Values }) {
     const { form, save } = useGroupForm('site', ['site_name', 'support_email', 'support_phone', 'whatsapp_number', 'demo_bot_key', 'alert_email', 'allow_signups', 'require_email_verification', 'announcement', 'terms_url', 'privacy_url'], values);
     return (
+        <>
         <Card title="Site" desc="Name, contact details and sign-up rules for the whole platform." form={form} save={save}>
             <Text form={form} k="site_name" label="Site name" hint="Shown in browser tabs and emails." />
             <Text form={form} k="support_email" label="Support email" type="email" />
@@ -140,6 +142,54 @@ function SiteTab({ values }: { values: Values }) {
             <div />
             <Toggle form={form} k="allow_signups" label="Allow new sign-ups" hint="Turn off to stop new accounts (existing customers can still log in)." />
             <Toggle form={form} k="require_email_verification" label="Require email verification" hint="New customers must click the link in their email before using the dashboard. Switch on only after the Email tab's test works." />
+        </Card>
+        <MediaCard values={values} />
+        </>
+    );
+}
+
+/** Logo and the home page's intro video. Files upload straight away; the YouTube link and switches use Save. */
+function MediaCard({ values }: { values: Values }) {
+    const { form, save } = useGroupForm('site', ['intro_enabled', 'intro_youtube', 'intro_vertical'], values);
+    const [uploading, setUploading] = useState<string | null>(null);
+    const upload = (kind: string, file: File | undefined) => {
+        if (!file) return;
+        setUploading(kind);
+        router.post(`/admin/settings/media/${kind}`, { file }, { forceFormData: true, preserveScroll: true, onFinish: () => setUploading(null) });
+    };
+    const remove = (kind: string) => confirm('Remove it and go back to the default brand file?') && router.delete(`/admin/settings/media/${kind}`, { preserveScroll: true });
+
+    const slot = (kind: string, label: string, accept: string, hint: string, preview: React.ReactNode) => (
+        <div className="field">
+            <label>{label}</label>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                {preview}
+                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                    <input type="file" accept={accept} hidden disabled={!!uploading} onChange={(e) => { upload(kind, e.target.files?.[0]); e.target.value = ''; }} />
+                    <Icon name={uploading === kind ? 'loader' : 'upload'} className={uploading === kind ? 'i i-sm spin' : 'i i-sm'} />
+                    {uploading === kind ? 'Uploading…' : values[kind] ? 'Replace' : 'Upload'}
+                </label>
+                {values[kind] && (
+                    <button className="btn btn-ghost btn-sm" title="Remove" onClick={() => remove(kind)}>
+                        <Icon name="trash" className="i i-sm" />
+                    </button>
+                )}
+            </div>
+            <span className="hint">{hint}</span>
+        </div>
+    );
+
+    return (
+        <Card title="Logo & intro video" desc="Your logo shows in the sidebar, on the home page and as the browser icon. The intro video plays in the 'Watch' section of the home page." form={form} save={save}>
+            {slot('site_logo', 'Logo (square icon)', 'image/png,image/jpeg,image/webp', 'PNG, JPG or WebP, square, at least 256×256, under 2 MB. Without one, the Hamsukhan brand-kit mascot is used.',
+                <img src={values.site_logo || '/brand/hamsukhan-icon.svg'} alt="Current logo" width={48} height={48} style={{ borderRadius: 12, objectFit: 'contain' }} />)}
+            {slot('intro_poster', 'Video cover image', 'image/png,image/jpeg,image/webp', 'Shown before the video plays. Optional.',
+                <img src={values.intro_poster || '/brand/hamsukhan-intro.jpg'} alt="Current cover" height={48} style={{ borderRadius: 8 }} />)}
+            {slot('intro_video', 'Intro video file', 'video/mp4,video/webm', `MP4 or WebM, under 200 MB (the server may allow less). ${values.intro_video ? 'Your upload is live.' : 'Until you upload one, the brand-kit reel plays.'}`,
+                values.intro_video ? <video src={values.intro_video} height={48} muted preload="metadata" style={{ borderRadius: 8 }} /> : <span className="chip">brand reel</span>)}
+            <Text form={form} k="intro_youtube" label="…or a YouTube link instead" placeholder="https://youtu.be/…" hint="If set, it is shown instead of the uploaded file. Good for long or big videos." />
+            <Toggle form={form} k="intro_enabled" label="Show the intro video on the home page" />
+            <Toggle form={form} k="intro_vertical" label="The uploaded video is vertical (phone / reel format)" hint="On: shown in a phone frame next to the text. Off: shown wide (16:9)." />
         </Card>
     );
 }
@@ -180,6 +230,7 @@ function BillingTab({ values }: { values: Values }) {
     const { form, save } = useGroupForm('billing', keys, values);
     const fairUse = "Monthly safety limit per account, across all its stores. Customers see 'Unlimited'; 0 = no limit. Your cost is roughly Rs 30-40 per minute (Vapi + ElevenLabs + LLM).";
     return (
+        <>
         <Card title="Plans & payment accounts" desc="Monthly plan prices (Basic: 1 store, 1 user · Business: 5 stores, 5 users), and where customers send manual payments." form={form} save={save}>
             <Text form={form} k="basic_price_pkr" label="Basic price per month (PKR)" type="number" />
             <Text form={form} k="basic_fair_use_minutes" label="Basic fair-use minutes per month" type="number" hint={fairUse} />
@@ -192,6 +243,137 @@ function BillingTab({ values }: { values: Values }) {
             <Text form={form} k="easypaisa_number" label="Easypaisa number" />
             <Text form={form} k="bank_title" label="Bank account title" />
             <Text form={form} k="bank_number" label="Bank IBAN" />
+        </Card>
+        <ConcurrencyCard values={values} />
+        <PaymentModeCard values={values} />
+        <GatewayCard values={values} gateway={JAZZCASH} />
+        <GatewayCard values={values} gateway={EASYPAISA} />
+        </>
+    );
+}
+
+/** How many calls may run at once, per account (its plan) and for the whole platform. */
+function ConcurrencyCard({ values }: { values: Values }) {
+    const { form, save } = useGroupForm('billing', ['concurrency_enabled', 'basic_concurrent_calls', 'business_concurrent_calls', 'platform_max_calls'], values);
+    return (
+        <Card
+            title="Calls at the same time"
+            desc="One assistant can take many calls at once. Switch this on to cap how many run together per account, and for the whole platform (e.g. the lines you bought on Vapi). A caller over the limit hears 'all lines are busy' and gets the callback form."
+            form={form}
+            save={save}
+        >
+            <Toggle form={form} k="concurrency_enabled" label="Limit calls at the same time" hint="Off: only Vapi's own account limit applies." />
+            <Text form={form} k="basic_concurrent_calls" label="Basic: calls at the same time" type="number" hint="All stores of the account together." />
+            <Text form={form} k="business_concurrent_calls" label="Business: calls at the same time" type="number" hint="All stores of the account together." />
+            <Text form={form} k="platform_max_calls" label="Whole platform: calls at the same time" type="number" hint="0 = no platform cap. Set it to your Vapi concurrency (and check your ElevenLabs plan's limit)." />
+        </Card>
+    );
+}
+
+/** Manual payments (our account numbers + receipt) can be switched off once a merchant gateway is connected. */
+function PaymentModeCard({ values }: { values: Values }) {
+    const { form, save } = useGroupForm('billing', ['manual_payments'], values);
+    const online = (values.jazzcash_online_enabled && values.jazzcash_password?.set) || (values.easypaisa_online_enabled && values.easypaisa_hash_key?.set);
+    return (
+        <Card
+            title="How customers pay"
+            desc="With a JazzCash or Easypaisa merchant account connected below, 'Get plan' opens the secure checkout and the plan switches on by itself. You can keep manual payments next to it, or switch them off."
+            form={form}
+            save={save}
+        >
+            <Toggle
+                form={form}
+                k="manual_payments"
+                label="Allow manual payments (send to the account numbers above + upload a screenshot)"
+                hint={online ? 'Off: customers can only pay through the connected checkout.' : 'Stays available until an online gateway is connected, so nobody is locked out.'}
+            />
+        </Card>
+    );
+}
+
+type GatewayDef = { id: string; title: string; desc: string; plain: { k: string; label: string; hint?: string }[]; secrets: { k: string; label: string }[]; sandboxHint: string; urls: { label: string; path: string }[] };
+
+const JAZZCASH: GatewayDef = {
+    id: 'jazzcash',
+    title: 'JazzCash merchant (online checkout)',
+    desc: 'Customers pay on JazzCash\'s own page (wallet or card). Get the credentials from the JazzCash merchant portal → Integration.',
+    plain: [{ k: 'jazzcash_merchant_id', label: 'Merchant ID' }],
+    secrets: [
+        { k: 'jazzcash_password', label: 'Password' },
+        { k: 'jazzcash_integrity_salt', label: 'Integrity salt' },
+    ],
+    sandboxHint: "Use JazzCash's sandbox credentials while testing; switch off with your live merchant credentials.",
+    urls: [{ label: 'Return URL (paste in the JazzCash merchant portal)', path: '/api/payments/jazzcash/return' }],
+};
+
+const EASYPAISA: GatewayDef = {
+    id: 'easypaisa',
+    title: 'Easypaisa merchant (online checkout)',
+    desc: 'Customers pay on Easypaisa\'s Easypay page (wallet, card or OTC). Every payment is confirmed with Easypaisa\'s API before the plan switches on. Credentials come with your Easypay merchant account.',
+    plain: [
+        { k: 'easypaisa_store_id', label: 'Store ID' },
+        { k: 'easypaisa_account_num', label: 'Merchant account number', hint: 'Used to confirm payments (inquire transaction).' },
+        { k: 'easypaisa_username', label: 'API username' },
+    ],
+    secrets: [
+        { k: 'easypaisa_hash_key', label: 'Hash key' },
+        { k: 'easypaisa_password', label: 'API password' },
+    ],
+    sandboxHint: "Use Easypay's staging (sandbox) credentials while testing.",
+    urls: [
+        { label: 'Post-back URL 1 (token)', path: '/payments/easypaisa/token' },
+        { label: 'Post-back URL 2 (result)', path: '/payments/easypaisa/final' },
+    ],
+};
+
+/** A merchant gateway: switch on, sandbox/live, credentials (secrets are never sent back, blank = keep) and its URLs. */
+function GatewayCard({ values, gateway: g }: { values: Values; gateway: GatewayDef }) {
+    const enabledKey = `${g.id}_online_enabled`;
+    const sandboxKey = `${g.id}_sandbox`;
+    const plainKeys = [enabledKey, sandboxKey, ...g.plain.map((f) => f.k)];
+    const secretKeys = g.secrets.map((f) => f.k);
+    const blankSecrets = Object.fromEntries(secretKeys.map((k) => [k, '']));
+    const form = useForm<Values>({ ...blankSecrets, ...Object.fromEntries(plainKeys.map((k) => [k, values[k] ?? ''])) });
+    const save = () => form.patch('/admin/settings/billing', { preserveScroll: true, onSuccess: () => form.setData({ ...form.data, ...blankSecrets }) });
+    const ready = !!values[enabledKey] && g.plain.every((f) => !!values[f.k]) && secretKeys.every((k) => values[k]?.set);
+
+    const secret = (k: string, label: string) => {
+        const st: Secret = values[k];
+        return (
+            <div className="field" key={k}>
+                <label htmlFor={k}>
+                    {label} {st?.set ? <span className="chip ok">{st.source === 'env' ? 'set in .env' : 'set'} · {st.hint}</span> : <span className="chip warn">not set</span>}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <input id={k} className={'input mono' + (form.errors[k] ? ' bad' : '')} type="password" autoComplete="off" placeholder={st?.set ? 'Leave empty to keep it' : 'Paste it'} value={form.data[k]} onChange={(e) => form.setData(k, e.target.value)} />
+                    {st?.source === 'admin' && (
+                        <button className="btn btn-ghost" title="Remove" onClick={() => confirm('Remove this key?') && router.delete(`/admin/settings/secret/${k}`, { preserveScroll: true })}>
+                            <Icon name="trash" className="i i-sm" />
+                        </button>
+                    )}
+                </div>
+                <FieldError msg={form.errors[k]} />
+            </div>
+        );
+    };
+
+    return (
+        <Card title={g.title} desc={g.desc} form={form} save={save}>
+            <div style={{ gridColumn: '1 / -1' }}>
+                {ready ? <span className="chip ok">Connected{values[sandboxKey] ? ' · sandbox (test money)' : ' · live'}</span> : <span className="chip warn">Not connected</span>}
+            </div>
+            <Toggle form={form} k={enabledKey} label="Accept online payments with this gateway" />
+            <Toggle form={form} k={sandboxKey} label="Sandbox (test) mode" hint={g.sandboxHint} />
+            {g.plain.map((f) => (
+                <Text key={f.k} form={form} k={f.k} label={f.label} hint={f.hint} />
+            ))}
+            {g.secrets.map((f) => secret(f.k, f.label))}
+            {g.urls.map((u) => (
+                <div className="field" key={u.path} style={{ gridColumn: '1 / -1' }}>
+                    <label>{u.label}</label>
+                    <input className="input mono" readOnly value={window.location.origin + u.path} onFocus={(e) => e.target.select()} />
+                </div>
+            ))}
         </Card>
     );
 }
@@ -467,6 +649,75 @@ function ProvidersTab({ values, webhookUrl }: { values: Values; webhookUrl: stri
     );
 }
 
+/** The Hamsukhan Shopify app: switch on, paste its client credentials, and copy our URLs into the Partner dashboard. */
+function ShopifyAppCard({ values, shops }: { values: Values; shops: number }) {
+    const { toast } = useUI();
+    const form = useForm<Values>({ shopify_enabled: !!values.shopify_enabled, shopify_client_id: values.shopify_client_id ?? '', shopify_client_secret: '' });
+    const save = () => form.patch('/admin/settings/plugins', { preserveScroll: true, onSuccess: () => form.setData('shopify_client_secret', '') });
+    const secret: Secret = values.shopify_client_secret;
+    const connected = !!values.shopify_enabled && !!values.shopify_client_id && !!secret?.set;
+    const origin = window.location.origin;
+    const urls: [string, string][] = [
+        ['App URL', `${origin}/shopify/install`],
+        ['Allowed redirection URL', `${origin}/integrations/shopify/callback`],
+        ['Privacy (GDPR) webhooks URL', `${origin}/api/shopify/webhooks`],
+    ];
+
+    return (
+        <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-h">
+                <div>
+                    <h3>
+                        Shopify app <span className={'chip ' + (connected ? 'ok' : 'warn')}>{connected ? 'Connected' : 'Not configured'}</span>
+                    </h3>
+                    <p>partners.shopify.com → Apps → your app → Client credentials. Customers then connect their store from Integrations and the call button is added for them. {shops} store{shops === 1 ? '' : 's'} connected.</p>
+                </div>
+            </div>
+            <div className="card-b stack">
+                <div className="grid-2">
+                    <Toggle form={form} k="shopify_enabled" label="Customers can connect Shopify stores" hint="Off = the Shopify card is hidden and the app's links stop working. Connected stores keep their call button." />
+                    <div className="field">
+                        <label htmlFor="shopify_client_id">Client ID</label>
+                        <input id="shopify_client_id" className={'input mono' + (form.errors.shopify_client_id ? ' bad' : '')} value={form.data.shopify_client_id} onChange={(e) => form.setData('shopify_client_id', e.target.value)} />
+                        <FieldError msg={form.errors.shopify_client_id} />
+                    </div>
+                    <div className="field">
+                        <label htmlFor="shopify_client_secret">
+                            Client secret {secret?.set ? <span className="chip ok">{secret.source === 'env' ? 'set in .env' : 'set'} · {secret.hint}</span> : <span className="chip warn">not set</span>}
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input id="shopify_client_secret" className={'input mono' + (form.errors.shopify_client_secret ? ' bad' : '')} type="password" autoComplete="off" placeholder={secret?.set ? 'Leave empty to keep the current secret' : 'Paste the secret'} value={form.data.shopify_client_secret} onChange={(e) => form.setData('shopify_client_secret', e.target.value)} />
+                            {secret?.source === 'admin' && (
+                                <button className="btn btn-ghost" title="Remove this secret" onClick={() => confirm('Remove the Shopify client secret?') && router.delete('/admin/settings/secret/shopify_client_secret', { preserveScroll: true })}>
+                                    <Icon name="trash" className="i i-sm" />
+                                </button>
+                            )}
+                        </div>
+                        <FieldError msg={form.errors.shopify_client_secret} />
+                    </div>
+                    {urls.map(([label, url]) => (
+                        <div key={label} className="field" style={{ gridColumn: '1 / -1' }}>
+                            <label>{label} (paste in the Partner dashboard)</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input className="input mono" readOnly value={url} onFocus={(e) => e.target.select()} />
+                                <button className="btn btn-ghost" title="Copy" onClick={() => navigator.clipboard?.writeText(url).then(() => toast('Copied'))}>
+                                    <Icon name="copy" className="i i-sm" />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="form-foot">
+                    <span>{form.isDirty ? 'Unsaved changes' : 'Saved'}</span>
+                    <button className="btn btn-primary" disabled={!form.isDirty || form.processing} onClick={save}>
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function PluginsTab({ values, plugins }: { values: Values; plugins: Props['plugins'] }) {
     const { form, save } = useGroupForm('plugins', ['connectors_enabled', 'form_connectors_enabled', 'connectors_max_per_bot'], values);
     const s = plugins.stats;
@@ -506,6 +757,7 @@ function PluginsTab({ values, plugins }: { values: Values; plugins: Props['plugi
                     </a>
                 </div>
             </Card>
+            <ShopifyAppCard values={values} shops={plugins.shopifyShops} />
             <div className="card">
                 <div className="card-h">
                     <div>

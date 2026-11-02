@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\PhoneNumberController;
 use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StoreController;
+use App\Http\Controllers\ShopifyController;
 use App\Http\Controllers\TestCallController;
 use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\VoiceController;
@@ -28,6 +29,7 @@ use App\Http\Middleware\EnsureAdmin;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\GoogleCalendarController;
 use App\Http\Controllers\InsightsController;
+use App\Http\Controllers\JazzCashController;
 use App\Http\Middleware\EnsureBot;
 use App\Http\Middleware\EnsureEmailVerified;
 use App\Http\Middleware\EnsureTeamPermission;
@@ -36,6 +38,10 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Middleware\EnsureNotSuspended;
 use Illuminate\Support\Facades\Route;
 
+// Easypaisa sends the browser back here twice (token, then result) without our session; see EasypaisaController.
+Route::match(['get', 'post'], '/payments/easypaisa/token', [\App\Http\Controllers\EasypaisaController::class, 'token'])->middleware('throttle:30,1')->name('easypaisa.token');
+Route::match(['get', 'post'], '/payments/easypaisa/final', [\App\Http\Controllers\EasypaisaController::class, 'final'])->middleware('throttle:30,1')->name('easypaisa.final');
+
 // Public landing page; signed-in users see it too (its buttons point to the dashboard).
 Route::get('/', [VoiceSampleController::class, 'landing'])->name('home');
 Route::get('/voice-samples/{sample}/play', [VoiceSampleController::class, 'play'])->middleware(['signed', 'throttle:60,1'])->name('voice-samples.play');
@@ -43,6 +49,8 @@ Route::post('/contact', [ContactController::class, 'store'])->middleware('thrott
 Route::post('/client-errors', \App\Http\Controllers\ClientErrorController::class)->middleware('throttle:20,1')->name('client-errors');
 Route::get('/terms', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy', [LegalController::class, 'privacy'])->name('privacy');
+// Shopify "App URL": the merchant opened/installed the Hamsukhan app in their Shopify admin (logs in first if needed).
+Route::get('/shopify/install', [ShopifyController::class, 'install'])->middleware('throttle:20,1')->name('shopify.install');
 
 // ---------- Guests ----------
 Route::middleware('guest')->group(function () {
@@ -94,6 +102,8 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
         Route::post('/accounts/{user}/impersonate', [AccountController::class, 'impersonate'])->name('accounts.impersonate');
 
         Route::get('/settings', [AdminSettingsController::class, 'show'])->name('settings');
+        Route::post('/settings/media/{kind}', [\App\Http\Controllers\Admin\MediaController::class, 'store'])->middleware('throttle:20,1')->name('settings.media');
+        Route::delete('/settings/media/{kind}', [\App\Http\Controllers\Admin\MediaController::class, 'destroy'])->name('settings.media.destroy');
         Route::patch('/settings/{group}', [AdminSettingsController::class, 'update'])->name('settings.update');
         Route::delete('/settings/secret/{key}', [AdminSettingsController::class, 'clearSecret'])->name('settings.secret');
         Route::post('/settings/test/{provider}', [AdminSettingsController::class, 'test'])->middleware('throttle:10,1')->name('settings.test');
@@ -170,6 +180,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::post('/integrations/google/connect', [GoogleCalendarController::class, 'connect'])->name('google.connect');
     Route::get('/integrations/google/callback', [GoogleCalendarController::class, 'callback'])->middleware('throttle:10,1')->name('google.callback');
     Route::delete('/integrations/google', [GoogleCalendarController::class, 'disconnect'])->name('google.disconnect');
+    Route::post('/integrations/shopify/connect', [ShopifyController::class, 'connect'])->middleware('throttle:10,1')->name('shopify.connect');
+    Route::get('/integrations/shopify/callback', [ShopifyController::class, 'callback'])->middleware('throttle:10,1')->name('shopify.callback');
+    Route::delete('/integrations/shopify/{shop}', [ShopifyController::class, 'destroy'])->name('shopify.destroy');
     Route::get('/integrations/connector.zip', [IntegrationController::class, 'package'])->name('integrations.package');
     Route::post('/integrations', [IntegrationController::class, 'store'])->name('integrations.store');
     Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');
@@ -181,6 +194,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
 
     Route::get('/billing', [BillingController::class, 'index'])->name('billing');
     Route::post('/billing/payments', [BillingController::class, 'storePayment'])->middleware('throttle:10,1')->name('payments.store');
+    Route::post('/billing/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('payments.checkout');
+    Route::get('/billing/checkout/{payment}', [JazzCashController::class, 'redirect'])->name('jazzcash.redirect');
+    Route::get('/billing/checkout/{payment}/easypaisa', [\App\Http\Controllers\EasypaisaController::class, 'redirect'])->name('easypaisa.redirect');
 
     Route::post('/stores', [StoreController::class, 'store'])->middleware('throttle:10,1')->name('stores.store');
     Route::post('/stores/{bot}/switch', [StoreController::class, 'switch'])->name('stores.switch');

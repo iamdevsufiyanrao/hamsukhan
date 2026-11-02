@@ -40,7 +40,7 @@ class HandleInertiaRequests extends Middleware
                 'impersonator' => ($id = $request->session()->get('impersonator_id')) ? \App\Models\User::find($id, ['id', 'name'])?->only('name') : null,
                 'badges' => [
                     'newBookings' => $user->bot?->bookings()->where('status', 'new')->count() ?? 0,
-                    'pendingTopUps' => $user->is_admin ? \App\Models\TopUp::where('status', 'pending')->count() : 0,
+                    'pendingTopUps' => $user->is_admin ? \App\Models\TopUp::awaitingReview()->count() : 0,
                     'newMessages' => $user->is_admin ? \App\Models\ContactMessage::where('status', 'new')->count() : 0,
                 ],
             ] : null,
@@ -59,6 +59,8 @@ class HandleInertiaRequests extends Middleware
                 'whatsapp' => config('hamsukhan.site.whatsapp'),
                 // Public bot key of the landing-page demo bot (public anyway, it is in every embed code).
                 'demoBotKey' => filled(config('hamsukhan.vapi.private_key')) ? config('hamsukhan.demo.bot_key') : null,
+                'logoUrl' => config('hamsukhan.site.logo_url') ?: null,
+                'introVideo' => $this->introVideo(),
             ],
             'config' => [
                 // Public prices for the landing page (the fair-use limits stay private).
@@ -66,6 +68,23 @@ class HandleInertiaRequests extends Middleware
                 'trialDays' => (int) config('hamsukhan.trial_days'),
             ],
         ];
+    }
+
+    /** The home page's intro video: a YouTube link wins, then the uploaded file, else the brand-kit reel. Null when switched off. */
+    private function introVideo(): ?array
+    {
+        $s = config('hamsukhan.site');
+        if (! ($s['intro_enabled'] ?? true)) {
+            return null;
+        }
+        if (filled($s['intro_youtube'] ?? null) && preg_match('~(?:v=|youtu\.be/|shorts/|embed/)([\w-]{6,})~', $s['intro_youtube'], $m)) {
+            return ['src' => null, 'poster' => null, 'youtubeId' => $m[1], 'vertical' => str_contains($s['intro_youtube'], '/shorts/')];
+        }
+        if (filled($s['intro_video'] ?? null)) {
+            return ['src' => $s['intro_video'], 'poster' => $s['intro_poster'] ?: null, 'youtubeId' => null, 'vertical' => (bool) ($s['intro_vertical'] ?? false)];
+        }
+
+        return ['src' => '/brand/hamsukhan-intro.mp4', 'poster' => '/brand/hamsukhan-intro.jpg', 'youtubeId' => null, 'vertical' => true];
     }
 
     private function plan(User $account): array
