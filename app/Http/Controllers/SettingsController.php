@@ -32,17 +32,20 @@ class SettingsController extends Controller
             ],
             'sessions' => TwoFactorController::sessions($request),
             'team' => ! $user->isMember() && ! $user->is_admin && $user->bot ? [
-                'max' => TeamController::MAX_MEMBERS,
+                'max' => $user->planLimits()['users'] - 1,
                 'members' => $user->members()->orderBy('name')->get()->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'role' => $m->team_role]),
             ] : null,
             'isMember' => $user->isMember(),
+            'stores' => ! $user->is_admin && $user->bot ? [
+                'limit' => $user->account()->planLimits()['stores'],
+                'current' => $user->bot->id,
+                'list' => $user->bots()->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->business_name ?: 'Store #'.$b->id, 'website' => $b->website, 'installed' => $b->installed_at !== null, 'active' => $b->is_active]),
+            ] : null,
             'notifications' => [
                 'email' => $user->notify_email,
                 'whatsapp' => $user->notify_whatsapp,
                 'whatsappNumber' => $user->whatsapp_number,
                 'dailySummary' => $user->notify_daily_summary,
-                'monthlyCapPkr' => $user->monthly_cap !== null ? (int) round((float) $user->monthly_cap * config('hamsukhan.pkr_per_usd')) : null,
-                'spentThisMonthPkr' => (int) round(app(\App\Services\WalletService::class)->spentThisMonth($user) * config('hamsukhan.pkr_per_usd')),
                 'whatsappAvailable' => app(\App\Services\WhatsAppService::class)->enabled(),
                 'recent' => $user->hasMany(\App\Models\NotificationLog::class)->latest()->limit(8)->get()
                     ->map(fn ($n) => ['kind' => $n->kind, 'channel' => $n->channel, 'status' => $n->status, 'error' => $n->error, 'at' => $n->created_at->toIso8601String()]),
@@ -70,7 +73,7 @@ class SettingsController extends Controller
         return back()->with('success', $emailChanged ? 'Profile saved, please verify your new email' : 'Profile saved');
     }
 
-    /** Lead / balance / summary alerts and the monthly spending limit (entered in PKR, stored in the wallet's USD). */
+    /** Lead / plan / summary alerts. */
     public function updateNotifications(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -78,7 +81,6 @@ class SettingsController extends Controller
             'whatsapp' => ['boolean'],
             'whatsappNumber' => ['nullable', 'string', 'max:30', 'required_if:whatsapp,true'],
             'dailySummary' => ['boolean'],
-            'monthlyCapPkr' => ['nullable', 'integer', 'min:500', 'max:10000000'],
         ], ['whatsappNumber.required_if' => 'Enter the WhatsApp number that should get the alerts.']);
 
         $number = null;
@@ -94,7 +96,6 @@ class SettingsController extends Controller
             'notify_whatsapp' => $request->boolean('whatsapp'),
             'whatsapp_number' => $number,
             'notify_daily_summary' => $request->boolean('dailySummary'),
-            'monthly_cap' => isset($data['monthlyCapPkr']) ? round($data['monthlyCapPkr'] / config('hamsukhan.pkr_per_usd'), 2) : null,
         ]);
 
         return back()->with('success', 'Notification settings saved');
@@ -179,15 +180,15 @@ class SettingsController extends Controller
         }
         Storage::deleteDirectory("voices/{$user->id}");
         Storage::deleteDirectory("top-ups/{$user->id}");
-        if ($user->bot) {
-            Storage::deleteDirectory("knowledge/{$user->bot->id}");
+        foreach ($user->bots()->pluck('id') as $botId) {
+            Storage::deleteDirectory("knowledge/{$botId}");
         }
         if ($user->avatar_path) {
             Storage::disk('public')->delete($user->avatar_path);
         }
 
         Auth::logout();
-        $user->delete(); // cascades to bot, calls, bookings, voices, wallet ledger
+        $user->delete(); // cascades to the stores' bots, calls, bookings, voices and payments
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

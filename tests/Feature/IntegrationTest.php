@@ -40,7 +40,7 @@ class IntegrationTest extends TestCase
 
     private function restaurant(): \App\Models\User
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $user->bot->update(['capture_fields' => \App\Support\CaptureFields::presets()['restaurant']]);
 
         return $user->fresh();

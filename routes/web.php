@@ -19,6 +19,7 @@ use App\Http\Controllers\LiveCallController;
 use App\Http\Controllers\Admin\PhoneNumberController;
 use App\Http\Controllers\Admin\ProviderVoiceController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StoreController;
 use App\Http\Controllers\TestCallController;
 use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\VoiceController;
@@ -89,7 +90,7 @@ Route::middleware(['auth', EnsureNotSuspended::class])->group(function () {
         Route::get('/accounts/{user}', [AccountController::class, 'show'])->name('accounts.show');
         Route::post('/accounts/{user}/suspend', [AccountController::class, 'suspend'])->name('accounts.suspend');
         Route::post('/accounts/{user}/activate', [AccountController::class, 'activate'])->name('accounts.activate');
-        Route::post('/accounts/{user}/balance', [AccountController::class, 'adjustBalance'])->name('accounts.balance');
+        Route::post('/accounts/{user}/plan', [AccountController::class, 'setPlan'])->name('accounts.plan');
         Route::post('/accounts/{user}/impersonate', [AccountController::class, 'impersonate'])->name('accounts.impersonate');
 
         Route::get('/settings', [AdminSettingsController::class, 'show'])->name('settings');
@@ -179,5 +180,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::post('/integration-deliveries/{delivery}/retry', [IntegrationController::class, 'retry'])->name('integrations.retry');
 
     Route::get('/billing', [BillingController::class, 'index'])->name('billing');
-    Route::post('/billing/top-ups', [BillingController::class, 'storeTopUp'])->name('top-ups.store');
+    Route::post('/billing/payments', [BillingController::class, 'storePayment'])->middleware('throttle:10,1')->name('payments.store');
+
+    Route::post('/stores', [StoreController::class, 'store'])->middleware('throttle:10,1')->name('stores.store');
+    Route::post('/stores/{bot}/switch', [StoreController::class, 'switch'])->name('stores.switch');
+    Route::delete('/stores/{bot}', [StoreController::class, 'destroy'])->name('stores.destroy');
 });

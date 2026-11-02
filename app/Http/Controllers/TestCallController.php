@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 
 /**
  * Finishes a test call from the dashboard while Vapi isn't connected yet:
- * it feeds a simulated end-of-call-report through the same ingest + billing path a real call uses.
+ * it feeds a simulated end-of-call-report through the same ingest path a real call uses.
  */
 class TestCallController extends Controller
 {
@@ -22,6 +22,6 @@ class TestCallController extends Controller
         $bot = $request->user()->bot;
         $call = $ingest->ingestEndOfCallReport(CallScenarios::endOfCallReport($bot, max(20, $data['seconds']), true, random_int(0, 999)));
 
-        return response()->json(['ok' => true, 'callId' => $call?->id, 'cost' => (float) $call?->cost]);
+        return response()->json(['ok' => true, 'callId' => $call?->id]);
     }
 }

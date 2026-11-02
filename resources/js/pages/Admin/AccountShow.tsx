@@ -4,7 +4,7 @@ import CallRow from '@/components/CallRow';
 import Icon from '@/components/Icon';
 import { FieldError, Modal } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
-import { fmtDate, fmtDateLong, fmtTime, timeAgo, usd } from '@/lib/format';
+import { fmtDate, fmtDateLong, fmtTime, pkr, timeAgo, usd } from '@/lib/format';
 import type { CallRowData } from '@/types';
 
 export type AdminActionRow = { id: number; action: string; admin: string | null; target: string | null; targetId: number | null; meta: Record<string, any> | null; at: string };
@@ -28,24 +28,45 @@ export function ActionLabel({ a }: { a: AdminActionRow }) {
             return <>approved a {usd(m.amount ?? 0)} top-up ({m.reference}) for</>;
         case 'reject_topup':
             return <>rejected a top-up for</>;
+        case 'set_plan':
+            return m.plan === 'none' ? (
+                <>ended the plan ({m.reason}) for</>
+            ) : (
+                <>
+                    set the <b>{planLabel(m.plan)}</b> plan for {m.months} month{m.months > 1 ? 's' : ''} ({m.reason}) for
+                </>
+            );
+        case 'approve_payment':
+            return (
+                <>
+                    approved a {planLabel(m.plan)} payment · {m.months} month{m.months > 1 ? 's' : ''} · {pkr(m.amountPkr ?? 0)} ({m.reference}) for
+                </>
+            );
+        case 'reject_payment':
+            return <>rejected a payment for</>;
         default:
             return <>{a.action} ·</>;
     }
 }
 
+const planLabel = (p: string | null | undefined) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : '-');
+
 type Props = {
-    account: { id: number; name: string; email: string; timezone: string; balance: number; suspended: boolean; suspendedReason: string | null; suspendedAt: string | null; createdAt: string };
+    account: { id: number; name: string; email: string; timezone: string; plan: string | null; lastPlan: string | null; planExpiresAt: string | null; suspended: boolean; suspendedReason: string | null; suspendedAt: string | null; createdAt: string };
     bot: { business: string | null; website: string | null; language: string; voice: string; installed: boolean; calls: number; bookings: number; integrations: number; vapiAssistantId: string | null } | null;
-    transactions: { id: number; date: string; text: string; type: string; amount: number; balanceAfter: number }[];
+    stores: { id: number; name: string; website: string | null; calls: number; active: boolean }[];
+    usage: { minutesUsed: number; fairUseMinutes: number | null; stores: number; users: number };
+    plans: { id: string; name: string }[];
+    payments: { id: number; date: string; plan: string; months: number; amountPkr: number; status: string }[];
     calls: CallRowData[];
     actions: AdminActionRow[];
 };
 
-export default function AccountShow({ account, bot, transactions, calls, actions }: Props) {
+export default function AccountShow({ account, bot, stores, usage, plans, payments, calls, actions }: Props) {
     const [suspendOpen, setSuspendOpen] = useState(false);
-    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [planOpen, setPlanOpen] = useState(false);
     const suspend = useForm({ reason: '' });
-    const adjust = useForm({ amount: '', reason: '' });
+    const planForm = useForm({ plan: account.plan ?? plans[0]?.id ?? 'basic', months: '1', reason: '' });
 
     return (
         <>
@@ -72,9 +93,9 @@ export default function AccountShow({ account, bot, transactions, calls, actions
                     <Icon name="login" />
                     Login as {account.name.split(' ')[0]}
                 </button>
-                <button className="btn btn-ghost" onClick={() => setAdjustOpen(true)}>
+                <button className="btn btn-ghost" onClick={() => setPlanOpen(true)}>
                     <Icon name="wallet" />
-                    Adjust balance
+                    Set plan
                 </button>
                 {account.suspended ? (
                     <button className="btn btn-primary" onClick={() => router.post(`/admin/accounts/${account.id}/activate`, {}, { preserveScroll: true })}>
@@ -99,8 +120,24 @@ export default function AccountShow({ account, bot, transactions, calls, actions
 
             <div className="kv-grid" style={{ marginBottom: 16 }}>
                 <div>
-                    <small>Balance</small>
-                    <strong className="num">{usd(account.balance)}</strong>
+                    <small>Plan</small>
+                    <strong>
+                        {account.plan ? planLabel(account.plan) : account.lastPlan ? `${planLabel(account.lastPlan)} (expired)` : 'No plan'}
+                        {account.planExpiresAt && <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{account.plan ? 'until' : 'ended'} {fmtDateLong(account.planExpiresAt)}</span>}
+                    </strong>
+                </div>
+                <div>
+                    <small>Minutes this month</small>
+                    <strong className="num">
+                        {usage.minutesUsed}
+                        {usage.fairUseMinutes ? ` / ${usage.fairUseMinutes} fair use` : ' · no limit'}
+                    </strong>
+                </div>
+                <div>
+                    <small>Stores · users allowed</small>
+                    <strong className="num">
+                        {stores.length} of {usage.stores} · {usage.users}
+                    </strong>
                 </div>
                 <div>
                     <small>Business</small>
@@ -166,25 +203,58 @@ export default function AccountShow({ account, bot, transactions, calls, actions
                     <div className="card">
                         <div className="card-h">
                             <div>
-                                <h3>Wallet ledger</h3>
-                                <p>Latest 15 balance changes</p>
+                                <h3>Stores</h3>
+                                <p>The first {usage.stores} take calls on the current plan</p>
                             </div>
                         </div>
                         <div className="tbl-wrap" style={{ marginTop: 14 }}>
                             <table className="tbl">
                                 <tbody>
-                                    {transactions.map((t) => (
+                                    {stores.map((st, i) => (
+                                        <tr key={st.id} style={{ cursor: 'default' }}>
+                                            <td className="bk-who">
+                                                <b>{st.name}</b>
+                                                <span>{st.website ?? 'no website yet'}</span>
+                                            </td>
+                                            <td className="num">{st.calls} calls</td>
+                                            <td className="r">
+                                                <span className={'chip ' + (st.active && i < usage.stores ? 'ok' : 'bad')}>{!st.active ? 'Off' : i < usage.stores ? 'On' : 'Over plan limit'}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div className="card">
+                        <div className="card-h">
+                            <div>
+                                <h3>Payments</h3>
+                                <p>Latest 15 plan payments</p>
+                            </div>
+                        </div>
+                        <div className="tbl-wrap" style={{ marginTop: 14 }}>
+                            <table className="tbl">
+                                <tbody>
+                                    {payments.length === 0 && (
+                                        <tr style={{ cursor: 'default' }}>
+                                            <td>
+                                                <div className="empty">No payments yet.</div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {payments.map((t) => (
                                         <tr key={t.id} style={{ cursor: 'default' }}>
                                             <td className="t-time">
                                                 {fmtDate(t.date)}
                                                 <span>{fmtTime(t.date)}</span>
                                             </td>
-                                            <td className="t-script">{t.text}</td>
-                                            <td className={'r num ' + (t.amount > 0 ? 'amt-pos' : 'amt-neg')}>
-                                                {t.amount > 0 ? '+' : '−'}${Math.abs(t.amount).toFixed(t.amount > 0 ? 2 : 4)}
+                                            <td className="t-script">
+                                                {t.plan} · {t.months} month{t.months > 1 ? 's' : ''}
                                             </td>
-                                            <td className="r num" style={{ color: 'var(--muted)' }}>
-                                                {usd(t.balanceAfter)}
+                                            <td className="r num">{pkr(t.amountPkr)}</td>
+                                            <td className="r">
+                                                <span className={'chip ' + (t.status === 'approved' ? 'ok' : t.status === 'rejected' ? 'bad' : 'pending')}>{t.status}</span>
                                             </td>
                                         </tr>
                                     ))}
@@ -237,43 +307,64 @@ export default function AccountShow({ account, bot, transactions, calls, actions
             </Modal>
 
             <Modal
-                open={adjustOpen}
-                onClose={() => setAdjustOpen(false)}
-                title="Adjust balance"
-                desc={`Current balance ${usd(account.balance)}. Use a negative amount to deduct. Recorded in their ledger and the audit log.`}
+                open={planOpen}
+                onClose={() => setPlanOpen(false)}
+                title="Set plan"
+                desc={`For cash payments, a free month or a correction. The same plan is extended from its end date; another plan starts today. Recorded in the audit log.`}
                 footer={
                     <>
-                        <button className="btn btn-ghost" onClick={() => setAdjustOpen(false)}>
+                        <button className="btn btn-ghost" onClick={() => setPlanOpen(false)}>
                             Cancel
                         </button>
                         <button
-                            className="btn btn-primary"
-                            disabled={!adjust.data.amount || !adjust.data.reason.trim() || adjust.processing}
-                            onClick={() =>
-                                adjust.post(`/admin/accounts/${account.id}/balance`, {
+                            className={'btn ' + (planForm.data.plan === 'none' ? 'btn-danger' : 'btn-primary')}
+                            disabled={!planForm.data.reason.trim() || planForm.processing}
+                            onClick={() => {
+                                planForm.transform((d) => (d.plan === 'none' ? { plan: d.plan, reason: d.reason } : { ...d, months: Number(d.months) }));
+                                planForm.post(`/admin/accounts/${account.id}/plan`, {
                                     preserveScroll: true,
                                     onSuccess: () => {
-                                        setAdjustOpen(false);
-                                        adjust.reset();
+                                        setPlanOpen(false);
+                                        planForm.reset('reason');
                                     },
-                                })
-                            }
+                                });
+                            }}
                         >
-                            Apply
+                            {planForm.data.plan === 'none' ? 'End plan now' : 'Apply'}
                         </button>
                     </>
                 }
             >
                 <div className="stack">
                     <div className="field">
-                        <label htmlFor="adj-amt">Amount (USD)</label>
-                        <input id="adj-amt" className="input num" type="number" step="0.01" placeholder="e.g. 5 or -2.50" value={adjust.data.amount} onChange={(e) => adjust.setData('amount', e.target.value)} />
-                        <FieldError msg={adjust.errors.amount} />
+                        <label htmlFor="plan-pick">Plan</label>
+                        <select id="plan-pick" className="select" value={planForm.data.plan} onChange={(e) => planForm.setData('plan', e.target.value)}>
+                            {plans.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.name}
+                                </option>
+                            ))}
+                            <option value="none">No plan (end it now)</option>
+                        </select>
+                        <FieldError msg={planForm.errors.plan} />
                     </div>
+                    {planForm.data.plan !== 'none' && (
+                        <div className="field">
+                            <label htmlFor="plan-months">Months</label>
+                            <select id="plan-months" className="select" value={planForm.data.months} onChange={(e) => planForm.setData('months', e.target.value)}>
+                                {[1, 2, 3, 6, 12].map((n) => (
+                                    <option key={n} value={String(n)}>
+                                        {n} month{n > 1 ? 's' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <FieldError msg={planForm.errors.months} />
+                        </div>
+                    )}
                     <div className="field">
-                        <label htmlFor="adj-reason">Reason</label>
-                        <input id="adj-reason" className="input" placeholder="e.g. Refund for failed calls on 12 Oct" value={adjust.data.reason} onChange={(e) => adjust.setData('reason', e.target.value)} />
-                        <FieldError msg={adjust.errors.reason} />
+                        <label htmlFor="plan-reason">Reason</label>
+                        <input id="plan-reason" className="input" placeholder="e.g. Paid cash at the office" value={planForm.data.reason} onChange={(e) => planForm.setData('reason', e.target.value)} />
+                        <FieldError msg={planForm.errors.reason} />
                     </div>
                 </div>
             </Modal>

@@ -27,7 +27,6 @@ export default function CallRow({ call, full, onOpen }: { call: CallRowData; ful
                     </td>
                 </>
             )}
-            <td className="r num">${call.cost.toFixed(4)}</td>
             {full && (
                 <td className="r" style={{ color: 'var(--muted)' }}>
                     <Icon name="chev" className="i i-sm" />

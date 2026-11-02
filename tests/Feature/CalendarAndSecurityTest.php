@@ -29,7 +29,7 @@ class CalendarAndSecurityTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-10-26 09:00', 'Asia/Karachi'));
         Mail::fake();
-        $user = $this->customer(10);
+        $user = $this->customer();
         $user->bot->update(['live_booking' => true, 'slot_minutes' => 60, 'business_hours' => ['mon' => ['open' => '10:00', 'close' => '13:00']]]);
 
         return $user->fresh();

@@ -13,7 +13,7 @@ class SuperAdminTest extends TestCase
     public function test_admin_pages_render_for_admin_only(): void
     {
         $admin = $this->admin();
-        $customer = $this->customer(3);
+        $customer = $this->customer();
         foreach (['/admin', '/admin/accounts', "/admin/accounts/{$customer->id}", '/admin/top-ups'] as $url) {
             $this->actingAs($admin)->get($url)->assertOk();
             $this->actingAs($customer)->get($url)->assertForbidden();
@@ -23,7 +23,7 @@ class SuperAdminTest extends TestCase
     public function test_impersonate_and_return(): void
     {
         $admin = $this->admin();
-        $customer = $this->customer(3);
+        $customer = $this->customer();
 
         $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/impersonate")->assertRedirect('/dashboard');
         $this->assertAuthenticatedAs($customer);
@@ -46,7 +46,7 @@ class SuperAdminTest extends TestCase
     public function test_suspend_blocks_login_and_takes_bot_offline(): void
     {
         $admin = $this->admin();
-        $customer = $this->customer(5);
+        $customer = $this->customer();
 
         $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/suspend", ['reason' => 'Chargeback'])->assertSessionHas('success');
         $this->assertTrue($customer->fresh()->isSuspended());
@@ -70,18 +70,20 @@ class SuperAdminTest extends TestCase
         $this->actingAs($this->admin())->post('/admin/accounts/'.$this->customer()->id.'/suspend', [])->assertSessionHasErrors('reason');
     }
 
-    public function test_adjust_balance_is_ledgered_and_audited(): void
+    public function test_admin_sets_or_ends_a_plan_and_it_is_audited(): void
     {
         $admin = $this->admin();
-        $customer = $this->customer(2);
+        $customer = $this->customer(null);
 
-        $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/balance", ['amount' => 3.5, 'reason' => 'Refund'])->assertSessionHas('success');
-        $this->assertSame('5.5000', $customer->fresh()->balance);
-        $this->assertSame('adjustment', $customer->transactions()->latest('id')->first()->type);
+        $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/plan", ['plan' => 'business', 'months' => 2])->assertSessionHasErrors('reason');
+        $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/plan", ['plan' => 'business', 'months' => 2, 'reason' => 'Paid cash'])->assertSessionHas('success');
+        $this->assertSame('business', $customer->fresh()->activePlan());
+        $this->assertTrue($customer->fresh()->plan_expires_at->between(now()->addMonths(2)->subMinute(), now()->addMonths(2)->addMinute()));
 
-        $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/balance", ['amount' => -50, 'reason' => 'Too much'])->assertSessionHas('error');
-        $this->assertSame('5.5000', $customer->fresh()->balance);
-        $this->assertSame(1, AdminAction::where('action', 'adjust_balance')->count());
+        $this->actingAs($admin)->post("/admin/accounts/{$customer->id}/plan", ['plan' => 'none', 'reason' => 'Refunded'])->assertSessionHas('success');
+        $this->assertNull($customer->fresh()->activePlan());
+        $this->assertSame(2, AdminAction::where('action', 'set_plan')->count());
+        $this->actingAs($customer)->post("/admin/accounts/{$customer->id}/plan", ['plan' => 'business', 'months' => 1, 'reason' => 'x'])->assertForbidden();
     }
 
     public function test_admin_login_goes_to_admin_overview(): void
@@ -94,8 +96,8 @@ class SuperAdminTest extends TestCase
     {
         $admin = $this->admin();
         $customer = $this->customer();
-        $topUp = $customer->topUps()->create(['amount_usd' => 10, 'amount_pkr' => 2800, 'method' => 'jazzcash', 'reference' => 'JC-1']);
+        $topUp = $customer->topUps()->create(['plan' => 'basic', 'months' => 1, 'amount_pkr' => 3000, 'method' => 'jazzcash', 'reference' => 'JC-1']);
         $this->actingAs($admin)->post("/admin/top-ups/{$topUp->id}/approve");
-        $this->assertTrue(AdminAction::where('action', 'approve_topup')->where('target_user_id', $customer->id)->exists());
+        $this->assertTrue(AdminAction::where('action', 'approve_payment')->where('target_user_id', $customer->id)->exists());
     }
 }

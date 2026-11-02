@@ -4,6 +4,7 @@ import Icon from '@/components/Icon';
 import { Avatar, FieldError, Modal, PasswordInput } from '@/components/ui';
 import SecuritySection, { type DeviceSession, type TwoFactor } from '@/components/SecuritySection';
 import TeamSection, { type Team } from '@/components/TeamSection';
+import StoresSection, { type Stores } from '@/components/StoresSection';
 import AppLayout from '@/layouts/AppLayout';
 import { timeAgo } from '@/lib/format';
 import type { SharedProps } from '@/types';
@@ -13,28 +14,25 @@ type Notifications = {
     whatsapp: boolean;
     whatsappNumber: string | null;
     dailySummary: boolean;
-    monthlyCapPkr: number | null;
-    spentThisMonthPkr: number;
     whatsappAvailable: boolean;
     recent: { kind: string; channel: string; status: string; error: string | null; at: string }[];
 };
-type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications; twoFactor: TwoFactor; sessions: DeviceSession[]; team: Team | null; isMember: boolean };
+type Props = { profile: { name: string; email: string; timezone: string }; timezones: string[]; notifications: Notifications; twoFactor: TwoFactor; sessions: DeviceSession[]; team: Team | null; isMember: boolean; stores: Stores | null };
 
-const KIND_LABEL: Record<string, string> = { lead: 'New lead', low_balance: 'Low balance', daily_summary: 'Daily summary', integration_failed: 'Connector failed', cap_reached: 'Spending limit' };
+const KIND_LABEL: Record<string, string> = { lead: 'New lead', plan_expiring: 'Plan renewal', fair_use: 'Fair-use limit', daily_summary: 'Daily summary', integration_failed: 'Connector failed', low_balance: 'Low balance', cap_reached: 'Spending limit' };
 
-/** Where lead alerts go, and the monthly spending limit. */
+/** Where lead and plan alerts go. */
 function NotificationsSection({ n }: { n: Notifications }) {
-    const form = useForm({ email: n.email, whatsapp: n.whatsapp, whatsappNumber: n.whatsappNumber ?? '', dailySummary: n.dailySummary, monthlyCapPkr: n.monthlyCapPkr === null ? '' : String(n.monthlyCapPkr) });
+    const form = useForm({ email: n.email, whatsapp: n.whatsapp, whatsappNumber: n.whatsappNumber ?? '', dailySummary: n.dailySummary });
     const save = () => {
-        form.transform((d) => ({ ...d, monthlyCapPkr: d.monthlyCapPkr === '' ? null : Number(d.monthlyCapPkr) }));
         form.patch('/settings/notifications', { preserveScroll: true, onSuccess: () => form.setDefaults() });
     };
 
     return (
         <div className="set-grid">
             <div>
-                <h4>Alerts and spending limit</h4>
-                <p>Get every new booking, callback request and low-balance warning on email or WhatsApp. The limit pauses your assistant once a month's calls cost that much.</p>
+                <h4>Alerts</h4>
+                <p>Get every new booking, callback request and plan renewal reminder on email or WhatsApp.</p>
             </div>
             <div className="stack" style={{ maxWidth: 520 }}>
                 <label className="check" style={{ marginTop: 0 }}>
@@ -56,12 +54,6 @@ function NotificationsSection({ n }: { n: Notifications }) {
                     <input type="checkbox" checked={form.data.dailySummary} onChange={(e) => form.setData('dailySummary', e.target.checked)} />
                     <span>Daily summary at 9 PM (only on days with calls or leads)</span>
                 </label>
-                <div className="field">
-                    <label htmlFor="cap">Monthly spending limit (Rs)</label>
-                    <input id="cap" className={'input' + (form.errors.monthlyCapPkr ? ' bad' : '')} type="number" min={500} step={100} placeholder="No limit" value={form.data.monthlyCapPkr} onChange={(e) => form.setData('monthlyCapPkr', e.target.value)} />
-                    <span className="hint">Spent this month: Rs {n.spentThisMonthPkr.toLocaleString('en-PK')}. Leave empty for no limit.</span>
-                    <FieldError msg={form.errors.monthlyCapPkr} />
-                </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" disabled={!form.isDirty || form.processing} onClick={save}>
                         Save alerts
@@ -87,7 +79,7 @@ function NotificationsSection({ n }: { n: Notifications }) {
     );
 }
 
-export default function Settings({ profile, timezones, notifications, twoFactor, sessions, team, isMember }: Props) {
+export default function Settings({ profile, timezones, notifications, twoFactor, sessions, team, isMember, stores }: Props) {
     const { auth } = usePage<SharedProps>().props;
     const user = auth!.user;
     const info = useForm(profile);
@@ -175,6 +167,7 @@ export default function Settings({ profile, timezones, notifications, twoFactor,
                     </div>
 
                     {auth?.bot && !isMember && <NotificationsSection n={notifications} />}
+                    {stores && <StoresSection stores={stores} isOwner={!isMember} />}
                     {team && <TeamSection team={team} />}
                     <SecuritySection twoFactor={twoFactor} sessions={sessions} />
 
@@ -223,7 +216,7 @@ export default function Settings({ profile, timezones, notifications, twoFactor,
                         <div className="danger-box">
                             <div>
                                 <b>Delete account</b>
-                                <p>Removes your bot, cloned voices, call recordings and remaining balance.</p>
+                                <p>Removes all your stores, cloned voices and call recordings.</p>
                             </div>
                             <button className="btn btn-danger" onClick={() => setDelOpen(true)}>
                                 Delete account
@@ -237,7 +230,7 @@ export default function Settings({ profile, timezones, notifications, twoFactor,
                 open={delOpen}
                 onClose={closeDelete}
                 title="Delete your account?"
-                desc="Your bot goes offline right away. Cloned voices, call recordings and any remaining balance are permanently removed."
+                desc="Every store's assistant goes offline right away. Cloned voices, call recordings and bookings are permanently removed."
                 footer={
                     <>
                         <button className="btn btn-ghost" onClick={closeDelete}>

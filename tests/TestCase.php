@@ -8,12 +8,14 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
-    /** A customer with a provisioned bot and the given wallet balance (USD). */
-    protected function customer(float $balance = 0): User
+    /** A customer with a provisioned bot, on the given plan for a month (null = no paid plan). */
+    protected function customer(?string $plan = 'basic'): User
     {
         $user = User::factory()->create();
         app(BotProvisioner::class)->provision($user);
-        $user->forceFill(['balance' => $balance])->save();
+        if ($plan) {
+            $user->forceFill(['plan' => $plan, 'plan_expires_at' => now()->addMonth()])->save();
+        }
 
         return $user->fresh();
     }

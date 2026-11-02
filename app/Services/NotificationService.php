@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
- * Owner alerts by email and WhatsApp: new lead, low balance, spending cap, connector failure, daily summary.
+ * Owner alerts by email and WhatsApp: new lead, plan renewal, fair-use limit, connector failure, daily summary.
  * Every alert has a dedupe key; the same key is never sent twice on the same channel (webhook retries, cron reruns).
  * Sending never throws: a failed alert is logged in notification_logs and must not break a call or booking.
  */
@@ -37,21 +37,19 @@ class NotificationService
         $this->send($user, 'lead', "lead:{$booking->id}", "{$kind} · {$booking->customer_name}", implode("\n", $lines), route('bookings'));
     }
 
-    public function lowBalance(User $user, float $threshold): void
+    /** A few days before the plan ends (once per paid period: the key holds the end date). */
+    public function planExpiring(User $user): void
     {
-        $pkr = (int) round((float) $user->balance * config('hamsukhan.pkr_per_usd'));
-        // Key includes the last top-up, so the alert comes back after the next top-up runs low again.
-        $lastTopUp = $user->transactions()->where('type', 'topup')->max('id') ?? 0;
-
-        $this->send($user, 'low_balance', "low:{$user->id}:{$threshold}:{$lastTopUp}", 'Your Hamsukhan balance is low',
-            "Your wallet balance is about Rs {$pkr} (\${$user->balance}). When it runs out your website assistant stops taking calls. Top up from the Billing page.", route('billing'));
+        $ends = $user->plan_expires_at->copy()->setTimezone($user->timezone);
+        $this->send($user, 'plan_expiring', "renew:{$user->id}:{$ends->toDateString()}", 'Your Hamsukhan plan ends on '.$ends->format('j M'),
+            "Your {$user->planLimits()['name']} plan ends on {$ends->format('j M Y')}. After that your assistant stops taking calls. Renew it from the Billing page.", route('billing'));
     }
 
-    public function capReached(User $user): void
+    public function fairUseReached(User $user): void
     {
         $month = now($user->timezone)->format('Y-m');
-        $this->send($user, 'cap_reached', "cap:{$user->id}:{$month}", 'Monthly spending limit reached',
-            "Your monthly spending limit of \${$user->monthly_cap} is used up, so your website assistant is paused until next month. Raise the limit in Settings to switch it back on.", route('settings'));
+        $this->send($user, 'fair_use', "fairuse:{$user->id}:{$month}", 'Monthly fair-use limit reached',
+            "Your stores used {$user->planLimits()['fair_use_minutes']} minutes of calls this month, the fair-use limit of your plan. Calls pause until the 1st. Contact support if you need more.", route('billing'));
     }
 
     public function integrationFailed(IntegrationDelivery $delivery): void
@@ -68,15 +66,16 @@ class NotificationService
     /** End-of-day digest for one owner (only when something happened that day). Returns false when there was nothing to send. */
     public function dailySummary(User $user, Carbon $day): bool
     {
-        $bot = $user->bot;
-        if (! $bot || ! $user->notify_daily_summary) {
+        // All of the account's stores together.
+        $botIds = $user->bots()->pluck('id');
+        if ($botIds->isEmpty() || ! $user->notify_daily_summary) {
             return false;
         }
         $from = $day->copy()->setTimezone($user->timezone)->startOfDay();
         $to = $from->copy()->endOfDay();
-        $calls = $bot->calls()->where('is_test', false)->whereBetween('started_at', [$from->copy()->utc(), $to->copy()->utc()]);
+        $calls = \App\Models\Call::whereIn('bot_id', $botIds)->where('is_test', false)->whereBetween('started_at', [$from->copy()->utc(), $to->copy()->utc()]);
         $count = (clone $calls)->count();
-        $leads = $bot->bookings()->whereBetween('created_at', [$from->copy()->utc(), $to->copy()->utc()])->latest()->get();
+        $leads = Booking::whereIn('bot_id', $botIds)->whereBetween('created_at', [$from->copy()->utc(), $to->copy()->utc()])->latest()->get();
         if ($count === 0 && $leads->isEmpty()) {
             return false;
         }
@@ -86,8 +85,6 @@ class NotificationService
             "Today on your website: {$count} conversation".($count === 1 ? '' : 's').", {$leads->count()} lead".($leads->count() === 1 ? '' : 's').'.',
             ...$leads->take(5)->map(fn (Booking $b) => "• {$b->customer_name}".($b->phone ? " ({$b->phone})" : '').": {$b->request}")->all(),
             ...($gaps->isNotEmpty() ? ['', 'Questions your assistant could not answer:', ...$gaps->map(fn ($q) => "• {$q}")->all()] : []),
-            '',
-            'Balance: about Rs '.(int) round((float) $user->balance * config('hamsukhan.pkr_per_usd')).'.',
         ];
 
         $this->send($user, 'daily_summary', "daily:{$user->id}:{$from->toDateString()}", 'Your Hamsukhan summary for '.$from->format('j M'), implode("\n", $lines), route('dashboard'));

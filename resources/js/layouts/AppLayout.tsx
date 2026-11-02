@@ -2,8 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { ReactNode, useEffect, useState } from 'react';
 import Icon, { IconName, Logo } from '@/components/Icon';
 import { Avatar, UIProvider, useUI } from '@/components/ui';
-import { TestCallModal, TopUpModal } from '@/components/GlobalModals';
-import { usd } from '@/lib/format';
+import { TestCallModal } from '@/components/GlobalModals';
 import type { SharedProps } from '@/types';
 
 const TITLES: Record<string, [string, string]> = {
@@ -70,7 +69,7 @@ function Shell({ children }: { children: ReactNode }) {
     }, [flash, toast]); // flash is a new object on every visit, so repeated messages still show
 
     if (!auth) return <>{children}</>;
-    const { user, wallet, badges } = auth;
+    const { user, plan, badges, stores } = auth;
     const isCustomer = !!auth.bot; // admin-only accounts have no bot
 
     const nav: { href: string; label: string; icon: IconName; component: string; badge?: number }[] = [
@@ -83,7 +82,6 @@ function Shell({ children }: { children: ReactNode }) {
         { href: '/integrations', label: 'Integrations', icon: 'plug', component: 'Integrations' },
         ...(user.teamRole ? [] : [{ href: '/billing', label: 'Billing', icon: 'wallet' as IconName, component: 'Billing' }]),
     ];
-    const fill = Math.min(100, (wallet.balance / 50) * 100);
 
     return (
         <div className="app">
@@ -91,6 +89,18 @@ function Shell({ children }: { children: ReactNode }) {
                 <Link href="/dashboard" aria-label="Hamsukhan home">
                     <Logo />
                 </Link>
+                {isCustomer && stores.length > 1 && (
+                    <div className="field" style={{ margin: '14px 0 0' }}>
+                        <label htmlFor="store-switch">Store</label>
+                        <select id="store-switch" className="input" value={auth.bot!.id} onChange={(e) => router.post(`/stores/${e.target.value}/switch`, {}, { preserveScroll: true })}>
+                            {stores.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
                 {isCustomer && <div className="nav-label">Workspace</div>}
                 <nav className="nav">
                     {isCustomer && nav.map((n) => (
@@ -118,19 +128,18 @@ function Shell({ children }: { children: ReactNode }) {
                 )}
                 <div className="side-foot">
                     {isCustomer && (<div className="mini-bal">
-                        <small>Balance</small>
+                        <small>Plan</small>
                         <div>
-                            <strong className="num" style={wallet.low ? { color: 'var(--danger)' } : undefined}>
-                                {usd(wallet.balance)}
-                            </strong>
-                            <button className="link" style={{ fontSize: 12.5 }} onClick={() => openModal('topup')}>
-                                Top up
-                            </button>
+                            <strong style={plan.active ? undefined : { color: 'var(--danger)' }}>{plan.active ? plan.name : 'Not active'}</strong>
+                            {!user.teamRole && (
+                                <Link href="/billing" className="link" style={{ fontSize: 12.5 }}>
+                                    {plan.active ? 'Renew' : 'Choose plan'}
+                                </Link>
+                            )}
                         </div>
-                        <div className="bar-track">
-                            <span style={{ width: fill + '%', background: wallet.low ? 'var(--danger)' : undefined }} />
-                        </div>
-                        <small style={{ display: 'block', marginTop: 6, fontWeight: 600 }}>≈ {wallet.minutesLeft} minutes left</small>
+                        <small style={{ display: 'block', marginTop: 6, fontWeight: 600 }}>
+                            {plan.active ? `Unlimited calls · ${plan.daysLeft} day${plan.daysLeft === 1 ? '' : 's'} left` : 'Your assistant is not taking calls'}
+                        </small>
                     </div>)}
                     <nav className="nav">
                         <Link href="/settings" className={component === 'Settings' ? 'on' : ''}>
@@ -198,13 +207,20 @@ function Shell({ children }: { children: ReactNode }) {
                             </Link>
                         </div>
                     )}
-                    {isCustomer && wallet.low && component !== 'Billing' && (
-                        <div className="alert warn">
+                    {isCustomer && component !== 'Billing' && (!plan.active || plan.daysLeft <= 3) && (
+                        <div className={'alert ' + (plan.active ? 'warn' : 'danger')}>
                             <Icon name="alert" />
-                            <span className="grow">Your balance is low ({usd(wallet.balance)}). Calls stop when it runs out.</span>
-                            <button className="btn btn-sm btn-primary" onClick={() => openModal('topup')}>
-                                Top up
-                            </button>
+                            <span className="grow">
+                                {plan.active
+                                    ? `Your ${plan.name} plan ends in ${plan.daysLeft} day${plan.daysLeft === 1 ? '' : 's'}. Renew it so your assistant keeps taking calls.`
+                                    : 'Your monthly plan is not active, so your assistant is not taking calls.'}
+                                {user.teamRole && ' Ask the account owner to renew it.'}
+                            </span>
+                            {!user.teamRole && (
+                                <Link href="/billing" className="btn btn-sm btn-primary">
+                                    {plan.active ? 'Renew' : 'Choose a plan'}
+                                </Link>
+                            )}
                         </div>
                     )}
                     <section className="page" key={component}>
@@ -222,7 +238,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             renderModals={(open, close) => (
                 <>
                     <TestCallModal open={open === 'test'} onClose={close} />
-                    <TopUpModal open={open === 'topup'} onClose={close} />
                 </>
             )}
         >

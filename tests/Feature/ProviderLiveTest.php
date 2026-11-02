@@ -106,7 +106,7 @@ class ProviderLiveTest extends TestCase
 
     public function test_widget_start_reports_a_bot_that_is_not_on_vapi(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $this->liveKeys();
         Http::fake(['api.vapi.ai/*' => Http::response(['message' => 'Invalid key'], 401)]);
 
@@ -126,15 +126,14 @@ class ProviderLiveTest extends TestCase
         $this->assertSame(['callback', 'widget', '+923001234567'], [$booking->type, $booking->source, $booking->phone]);
     }
 
-    public function test_demo_calls_are_never_billed(): void
+    public function test_demo_calls_are_stored_as_tests(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $this->postJson('/api/webhooks/vapi', ['message' => [
             'type' => 'end-of-call-report', 'call' => ['id' => 'demo_1', 'metadata' => ['botId' => $user->bot->id, 'isDemo' => true]],
             'durationSeconds' => 85, 'artifact' => ['messages' => [['role' => 'user', 'message' => 'Kal slot hai?']]],
         ]])->assertOk();
 
-        $this->assertEquals(10, (float) $user->fresh()->balance);
         $this->assertTrue((bool) $user->bot->calls()->firstOrFail()->is_test);
     }
 

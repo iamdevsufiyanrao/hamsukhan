@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Conversion funnel, after-hours share, cost per lead and the knowledge-gap list (questions the bot could not answer). */
+/** Conversion funnel, after-hours share, plan cost per lead and the knowledge-gap list (questions the bot could not answer). */
 class InsightsController extends Controller
 {
     public function __invoke(Request $request): Response
@@ -22,7 +22,6 @@ class InsightsController extends Controller
         $total = (clone $calls)->count();
         $completed = (clone $calls)->where('status', 'completed')->count();
         $afterHours = (clone $calls)->where('after_hours', true)->count();
-        $cost = (float) (clone $calls)->sum('cost');
 
         $leads = $bot->bookings()->where('created_at', '>=', $from);
         $leadCount = (clone $leads)->count();
@@ -39,7 +38,8 @@ class InsightsController extends Controller
             ->map(fn ($g) => ['question' => $g->first()['q'], 'count' => $g->count(), 'callId' => $g->first()['call'], 'lastAt' => $g->first()['at']->toIso8601String()])
             ->sortByDesc('count')->values()->take(50);
 
-        $rate = config('hamsukhan.pkr_per_usd');
+        // What the period cost on the monthly plan (the plan's price spread over the days shown).
+        $cost = $user->account()->planLimits()['price_pkr'] * $days / 30;
 
         return Inertia::render('Insights', [
             'days' => $days,
@@ -55,9 +55,9 @@ class InsightsController extends Controller
                 'leadRate' => $total ? round($fromCalls / $total * 100) : 0,
                 'afterHoursShare' => $total ? round($afterHours / $total * 100) : 0,
                 'afterHoursLeads' => $afterHoursLeads,
-                'costPkr' => (int) round($cost * $rate),
-                'costPerConversationPkr' => $total ? (int) round($cost * $rate / $total) : 0,
-                'costPerLeadPkr' => $fromCalls ? (int) round($cost * $rate / $fromCalls) : null,
+                'costPkr' => (int) round($cost),
+                'costPerConversationPkr' => $total ? (int) round($cost / $total) : 0,
+                'costPerLeadPkr' => $fromCalls ? (int) round($cost / $fromCalls) : null,
                 'hoursSet' => (bool) $bot->business_hours,
             ],
             'byStatus' => collect(Booking::STATUSES)->map(fn ($s) => ['status' => $s, 'count' => (int) ($byStatus[$s] ?? 0)]),

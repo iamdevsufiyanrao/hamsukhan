@@ -1,4 +1,4 @@
-import { router, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import Icon from './Icon';
 import { FieldError } from './ui';
 
@@ -18,7 +18,9 @@ export default function TeamSection({ team }: { team: Team }) {
         <div className="set-grid">
             <div>
                 <h4>Team</h4>
-                <p>Give staff their own login to your account. They get an email to set a password. Billing and the team stay with you.</p>
+                <p>
+                    Give staff their own login to your account. They get an email to set a password. Billing and the team stay with you. Your plan includes {team.max + 1} user{team.max ? 's' : ''}, you included.
+                </p>
             </div>
             <div className="stack" style={{ maxWidth: 560 }}>
                 {team.members.map((m) => (
@@ -39,6 +41,17 @@ export default function TeamSection({ team }: { team: Team }) {
                         </button>
                     </div>
                 ))}
+                {team.members.length >= team.max && (
+                    <p className="hint">
+                        {team.max === 0 ? (
+                            <>
+                                Your plan includes 1 user. The <Link href="/billing">Business plan</Link> adds up to 4 team members.
+                            </>
+                        ) : (
+                            `You are using all ${team.max + 1} users of your plan.`
+                        )}
+                    </p>
+                )}
                 {team.members.length < team.max && (
                     <form
                         className="stack"

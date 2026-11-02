@@ -176,14 +176,16 @@ function SeoTab({ values }: { values: Values }) {
 }
 
 function BillingTab({ values }: { values: Values }) {
-    const keys = ['rate_per_minute', 'min_topup_usd', 'pkr_per_usd', 'low_balance_usd', 'jazzcash_title', 'jazzcash_number', 'easypaisa_title', 'easypaisa_number', 'bank_title', 'bank_number'];
+    const keys = ['basic_price_pkr', 'basic_fair_use_minutes', 'business_price_pkr', 'business_fair_use_minutes', 'trial_days', 'jazzcash_title', 'jazzcash_number', 'easypaisa_title', 'easypaisa_number', 'bank_title', 'bank_number'];
     const { form, save } = useGroupForm('billing', keys, values);
+    const fairUse = "Monthly safety limit per account, across all its stores. Customers see 'Unlimited'; 0 = no limit. Your cost is roughly Rs 30-40 per minute (Vapi + ElevenLabs + LLM).";
     return (
-        <Card title="Pricing & payment accounts" desc="What customers pay per minute, and where they send manual top-ups." form={form} save={save}>
-            <Text form={form} k="rate_per_minute" label="Price per minute (USD)" type="number" hint="Your cost is roughly $0.10–0.12/min (Vapi + ElevenLabs + LLM). Keep a margin." />
-            <Text form={form} k="pkr_per_usd" label="PKR per USD" type="number" hint="Used to show PKR amounts for top-ups." />
-            <Text form={form} k="min_topup_usd" label="Minimum top-up (USD)" type="number" />
-            <Text form={form} k="low_balance_usd" label="Low-balance warning below (USD)" type="number" />
+        <Card title="Plans & payment accounts" desc="Monthly plan prices (Basic: 1 store, 1 user · Business: 5 stores, 5 users), and where customers send manual payments." form={form} save={save}>
+            <Text form={form} k="basic_price_pkr" label="Basic price per month (PKR)" type="number" />
+            <Text form={form} k="basic_fair_use_minutes" label="Basic fair-use minutes per month" type="number" hint={fairUse} />
+            <Text form={form} k="business_price_pkr" label="Business price per month (PKR)" type="number" />
+            <Text form={form} k="business_fair_use_minutes" label="Business fair-use minutes per month" type="number" hint={fairUse} />
+            <Text form={form} k="trial_days" label="Free trial days" type="number" hint="Free Basic days for new sign-ups, 0 = none." />
             <Text form={form} k="jazzcash_title" label="JazzCash account title" />
             <Text form={form} k="jazzcash_number" label="JazzCash number" />
             <Text form={form} k="easypaisa_title" label="Easypaisa account title" />

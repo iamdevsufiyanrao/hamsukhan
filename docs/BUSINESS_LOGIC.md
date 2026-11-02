@@ -12,7 +12,7 @@ The rules the code enforces. Each rule names where it lives; most have a feature
 - Forgot password always answers "if an account exists, a link is on its way" — the endpoint can't be used to find emails.
 - Changing the email clears `email_verified_at`.
 - Deleting an account needs the word `DELETE` **and** the password. It deletes cloned voices at ElevenLabs, all stored files,
-  and (by cascade) the bot, calls, bookings and wallet ledger. → `SettingsController@destroy`
+  and (by cascade) every store's bot, calls, bookings and payments. → `SettingsController@destroy`
 - Default timezone `Asia/Karachi`; "today" and "this month" on the dashboard use the user's timezone.
 
 ## 2. Bot configuration
@@ -40,43 +40,47 @@ The rules the code enforces. Each rule names where it lives; most have a feature
 ```
 visitor clicks widget ─► POST /api/widget/{key}/start
                           · bot must be active
-                          · maxDurationSeconds = min(bot max length, balance ÷ per-second rate)
-                          · < 30 affordable seconds ⇒ 402 "no_balance" (widget shows an error, call never starts)
+                          · maxDurationSeconds = min(bot max length, fair-use minutes left this month)
+                          · no active plan / store over the plan / fair use used up ⇒ 402 with the reason (call never starts)
                        ─► browser starts the Vapi web call (public key + assistant id + overrides)
 Vapi ⇄ OpenAI ⇄ ElevenLabs (live)
 call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vapi
                           · x-vapi-secret must match (required in production)
-                          · CallIngestService: Call + transcript + optional Booking, then WalletService charges it
+                          · CallIngestService: Call + transcript + optional Booking (no per-call charge)
 ```
-- **Idempotent:** `calls.vapi_call_id` is unique, and `wallet_transactions.call_id` is unique → a retried webhook never
-  duplicates or double-charges a call.
+- **Idempotent:** `calls.vapi_call_id` is unique → a retried webhook never duplicates a call.
 - Status: `failed` if duration is 0 or the end reason is an error; `dropped` if the caller never spoke; else `completed`.
 - Title / outcome / booking come from Vapi's structured-data analysis (schema defined in `VapiService::assistantPayload`).
   Outcome must be one of: Booking, Order, Enquiry, Pricing, Support, No outcome.
 - A booking is created only when the analysis has a customer name **and** a request.
 - System-prompt messages are never stored in the transcript.
-- "Test your bot" calls are flagged `is_test`, are charged like real calls, and are excluded from dashboard counts.
-  Without a Vapi key the test call is **simulated**: a sample conversation goes through the exact same ingest + billing path.
+- "Test your bot" calls are flagged `is_test`, need an active plan like real calls, and are excluded from dashboard counts.
+  Without a Vapi key the test call is **simulated**: a sample conversation goes through the exact same ingest path.
 - The widget marks the bot as **installed** the first time its config is loaded from a domain other than ours.
 
-## 6. Money
-- Wallet in **USD** (Vapi bills in USD). Price: **$0.12 / minute, billed per second**: `cost = seconds × rate ÷ 60`, 4 decimals.
-- **Only `WalletService` changes a balance.** Each change locks the user row, updates `users.balance` and writes one
-  `wallet_transactions` row with `balance_after`, in a single DB transaction. The ledger always sums to the balance.
-- Call charges never take the balance below zero (they're clamped); the max-duration cap keeps that gap tiny.
-  Manual debits that would overdraw are refused.
-- Low-balance warning below **$5**.
+## 6. Plans (monthly subscription)
+- Two plans, prices in PKR (super admin can change them in Settings → Billing):
+  **Basic Rs 3,000/month: 1 store, 1 user** · **Business Rs 25,000/month: 5 stores, 5 users** (owner included). → `config/hamsukhan.php` `plans`
+- Calls are **unlimited** while the plan is paid. Each plan has a hidden **fair-use limit** in minutes per account per calendar month
+  (all its stores together, failed connections don't count; 0 = no limit). Near the limit the call's max length shrinks; at the limit
+  calls stop until the 1st and the owner gets one alert. → `SubscriptionService::blockReason / maxCallSeconds`
+- A call (website, test, AI callback, reminder, campaign) only starts with an active plan. Reasons: `no_plan`, `store_limit`, `fair_use`.
+- **Stores:** each store is a bot (own prompt, voice, widget key, calls, bookings, connectors). `users.current_bot_id` = the store
+  the user has open; `User::bot()` returns it (else the oldest). Everyone in the account can switch; only the owner adds/removes
+  (type DELETE; never the last store). After a downgrade the **oldest** N stores keep working, the rest refuse calls.
+- **Users:** owner + team members ≤ the plan's users. Without an active plan the Basic limits apply.
+- `calls.cost` = what Vapi charged us (from the end-of-call report), shown only to the super admin.
+- Renewal reminder 3 days before the end (daily cron, once per period). Optional free trial: `trial_days` (default 0).
+- The old wallet (`users.balance`, `wallet_transactions`) is no longer read or written; the data stays in the DB as history.
 
-## 7. Payments (manual top-ups — no gateway yet)
-- Why: the company isn't registered, so Stripe/PayPal aren't available. Later: JazzCash/Easypaisa merchant (CNIC + NTN)
-  or Safepay, added as a new payment method without touching the wallet logic.
-- Customer flow: choose amount (min **$5**, max $1000) → we show the PKR amount (`HAMSUKHAN_PKR_PER_USD`, default 280)
-  and our JazzCash / Easypaisa / bank account → customer pays in their app → submits **transaction ID + screenshot**.
-  At most 3 pending top-ups per customer. Nothing is credited yet. → `BillingController@storeTopUp`
-- Admin flow (`/admin/top-ups`): check the payment in the real account, then
-  - **Approve** → wallet credited once (row lock + status check; approving twice is refused), reviewer + time recorded.
-  - **Reject** → a reason is required and is shown to the customer.
-  → `Admin\TopUpController`, `WalletService::approveTopUp / rejectTopUp`
+## 7. Payments (manual — no gateway yet)
+- Why: the company isn't registered, so Stripe/PayPal aren't available.
+- Owner flow: pick plan + months (1/3/6/12) → we show the PKR total (price × months, computed on the server) and our
+  JazzCash / Easypaisa / bank account → owner pays → submits **transaction ID + screenshot**. At most 3 pending. → `BillingController@storePayment`
+- Admin flow (`/admin/top-ups`): **Approve** → plan activated once (row lock + status check). Same plan while still paid is
+  **extended from its end date**; a different or expired plan starts today. **Reject** needs a reason, shown to the owner.
+  → `SubscriptionService::approvePayment / rejectPayment / activate`
+- The super admin can also set or end a plan by hand on the account page (reason required, audited as `set_plan`).
 
 ## 8. Bookings
 - Created automatically from calls (see §5). Status flow **new → confirmed → done** (any order allowed, owner only).
@@ -124,7 +128,7 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
   or nest impersonations. Everything done while impersonating happens on the customer's account.
 - **Suspend** (reason required): signs them out on their next request, blocks login, sets the bot inactive so the
   widget refuses calls. **Re-activate** reverses it.
-- **Adjust balance** (± up to $1000, reason required): goes through `WalletService::adjust` (can't overdraw).
+- **Set plan** (plan + 1–12 months, or end it now; reason required): goes through `SubscriptionService::activate`, audited as `set_plan`.
 - **Payments:** approve/reject manual top-ups (§7).
 - **Audit log:** every impersonation, suspend/activate, adjustment and top-up review is stored in `admin_actions`
   with admin, target, details and IP, shown on the overview and account pages.
@@ -135,7 +139,7 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
   so they win over `.env`. Empty value = use the default. Cached; saving clears the cache.
 - Groups: **Site** (name, support email/phone, terms/privacy links, announcement banner, allow sign-ups) ·
   **SEO** (meta title/description/keywords, share image, index on/off, Google Analytics id — format-validated) ·
-  **Billing** (rate per minute, PKR rate, minimum top-up, low-balance threshold, JazzCash/Easypaisa/bank details) ·
+  **Billing** (Basic/Business price and fair-use minutes, trial days, JazzCash/Easypaisa/bank details) ·
   **API keys** (Vapi private/public key, webhook secret, model; ElevenLabs key + model; OpenAI key) ·
   **Plugins** (connectors on/off platform-wide, allow form connectors, max per account; pause any customer's connector) ·
   **Cron & system** (heartbeat, cron line, "Run now", health checks).
@@ -166,7 +170,7 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 - **Admin → ElevenLabs voices:** lists voices in the ElevenLabs account and assigns one to a customer (`provider = elevenlabs_import`, never deleted on ElevenLabs when the customer removes it).
 
 ## Pilot features (2026-10-22)
-- **Owner alerts** (`NotificationService`): new lead (call or callback form; not for test calls), low balance (highest threshold in `notifications.low_balance_thresholds`, once per top-up), monthly cap reached (once per month), connector delivery failed for good, daily summary at 21:00 PKT (only on days with activity). Channels: email (`notify_email`) and WhatsApp Cloud API (`notify_whatsapp` + `whatsapp_number`, needs platform token). `notification_logs` unique (dedupe_key, channel) = never sent twice; a failed alert is logged, never breaks a call.
+- **Owner alerts** (`NotificationService`): new lead (call or callback form; not for test calls), plan renewal (3 days before the end, once per paid period), fair-use limit reached (once per month), connector delivery failed for good, daily summary at 21:00 PKT (only on days with activity). Channels: email (`notify_email`) and WhatsApp Cloud API (`notify_whatsapp` + `whatsapp_number`, needs platform token). `notification_logs` unique (dedupe_key, channel) = never sent twice; a failed alert is logged, never breaks a call.
 - **Monthly spending cap** (`users.monthly_cap`, USD, entered in PKR): `maxAffordableSeconds` also caps by what is left this month; at zero the widget answers 402 `cap_reached`.
 - **Opening hours + holidays** (`bots.business_hours`, `bots.holidays`, `BusinessHours`): written into the prompt; calls outside them get `calls.after_hours`.
 - **Allowed websites** (`bots.allowed_domains`): widget config/start/callback refuse other origins (403). Our own app host and localhost are always allowed.
@@ -184,11 +188,11 @@ call ends            ─► Vapi POSTs "end-of-call-report" to /api/webhooks/vap
 ## Phone calls, transfer, AI callbacks, reminders (2026-10-22)
 - **Phone numbers**: bought/imported in Vapi (Twilio, Telnyx, Vonage, SIP; Vapi sells no +92 numbers). Super admin → Phone numbers assigns one to a bot (`bots.vapi_phone_number_id`); Vapi then rings that bot's assistant for inbound calls. Calls get `direction` (web/inbound/outbound) and `customer_number` from the report.
 - **Transfer to a person** (`bots.transfer_number`): Vapi `transferCall` tool; phone calls only. On website calls the bot takes a callback.
-- **AI callback**: Bookings → "AI call back" makes an outbound call (bot's number, else `vapi.phone_number_id`). Needs ≥60 s affordable (balance + monthly cap); not twice within 10 minutes; a `new` lead becomes `contacted`. Billed through the normal end-of-call report.
+- **AI callback**: Bookings → "AI call back" makes an outbound call (bot's number, else `vapi.phone_number_id`). Needs an active plan (and ≥60 s of fair use left); not twice within 10 minutes; a `new` lead becomes `contacted`. Covered by the plan like any call.
 - **Reminder calls** (`bots.reminder_hours` 2/4/24): every 15 minutes, confirmed bookings starting inside the window are called once (`bookings.reminder_called_at` is set before dialling).
 
 ## Live calls, team, history, campaigns (2026-10-22)
 - **Live now**: assistants send `status-update`; `in-progress` stores the call's Vapi monitor URLs (`live_calls`, encrypted), `ended` / end-of-call report removes it (stale after 2 h). Dashboard and Call Logs poll `/live-calls`; Listen plays the listen WebSocket as 16-bit PCM (rate/channels in Admin → API keys, not documented by Vapi). Say / Tell the bot (system message, not spoken) / End go server-side to the control URL (only `*.vapi.ai` hosts). Viewers can't listen or control.
-- **Team** (`users.owner_id`, `team_role`): owner adds up to 10 members; the password-reset email is the invite. Members use the owner's bot, voices, calendar and wallet (`User::account()`); `EnsureTeamPermission`: admin = all but billing and team, operator = view + leads/AI callback/live calls/test calls, viewer = view only. Owner suspended ⇒ members locked out. A member deleting "their account" deletes only their login. Admin's account list hides members.
+- **Team** (`users.owner_id`, `team_role`): owner adds members up to the plan's users (Basic: none, Business: 4); the password-reset email is the invite. Members use the owner's stores, voices, calendar and plan (`User::account()`) and can switch stores; `EnsureTeamPermission`: admin = all but billing and team, operator = view + leads/AI callback/live calls/test calls, viewer = view only. Owner suspended ⇒ members locked out. A member deleting "their account" deletes only their login. Admin's account list hides members.
 - **Knowledge history** (`knowledge_versions`, last 50): greeting/instructions/quick facts are snapshotted before every change; restore keeps the current state as a version too.
-- **Campaigns** (`campaigns`, `campaign_contacts`): owner pastes up to 500 contacts and must confirm consent. Every 5 minutes running campaigns call the next contacts (`per_run` at a time) only inside opening hours (10:00–20:00 PKT without hours). No balance ⇒ campaign pauses. The end-of-call report marks the contact done/failed (scoped to the bot).
+- **Campaigns** (`campaigns`, `campaign_contacts`): owner pastes up to 500 contacts and must confirm consent. Every 5 minutes running campaigns call the next contacts (`per_run` at a time) only inside opening hours (10:00–20:00 PKT without hours). Plan inactive or fair use used up ⇒ campaign pauses. The end-of-call report marks the contact done/failed (scoped to the bot).

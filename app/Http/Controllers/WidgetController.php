@@ -6,7 +6,7 @@ use App\Models\Bot;
 use App\Services\Integrations\IntegrationDispatcher;
 use App\Services\NotificationService;
 use App\Services\VapiService;
-use App\Services\WalletService;
+use App\Services\SubscriptionService;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,7 +36,7 @@ class WidgetController extends Controller
         ]));
     }
 
-    public function start(Request $request, string $publicKey, WalletService $wallet, VapiService $vapi): JsonResponse
+    public function start(Request $request, string $publicKey, SubscriptionService $subscriptions, VapiService $vapi): JsonResponse
     {
         $bot = Bot::with('user')->where('public_key', $publicKey)->firstOrFail();
 
@@ -47,11 +47,11 @@ class WidgetController extends Controller
             return $this->cors(response()->json(['ok' => false, 'reason' => 'inactive', 'message' => 'This assistant is switched off.'], 409));
         }
 
-        $maxSeconds = $wallet->maxAffordableSeconds($bot->user, $bot->max_call_minutes);
+        $maxSeconds = $subscriptions->maxCallSeconds($bot);
         if ($maxSeconds < 30) {
-            $capped = $bot->user->monthly_cap !== null && $wallet->spentThisMonth($bot->user) >= (float) $bot->user->monthly_cap;
+            $reason = $subscriptions->blockReason($bot) ?? 'fair_use';
 
-            return $this->cors(response()->json(['ok' => false, 'reason' => $capped ? 'cap_reached' : 'no_balance', 'message' => $capped ? 'The monthly spending limit is reached.' : 'Not enough balance for a call.'], 402));
+            return $this->cors(response()->json(['ok' => false, 'reason' => $reason, 'message' => SubscriptionService::blockMessage($reason)], 402));
         }
 
         if ($error = $this->ensureLive($bot, $vapi)) {

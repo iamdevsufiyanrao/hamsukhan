@@ -1,6 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import Icon, { IconName } from '@/components/Icon';
+import ShopifyGuide from '@/components/ShopifyGuide';
 import { FieldError, Modal, Seg, useUI } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
 import { fileSize, fmtDate, fmtDateLong } from '@/lib/format';
@@ -978,6 +979,7 @@ function EmbedPane({ src, publicKey, installedAt }: { src: string; publicKey: st
     const snippet = `<script src="${src}" data-bot="${publicKey}" defer></script>`;
 
     return (
+        <>
         <div className="card">
             <div className="card-h">
                 <div>
@@ -1018,6 +1020,8 @@ function EmbedPane({ src, publicKey, installedAt }: { src: string; publicKey: st
                 </div>
             </div>
         </div>
+        <ShopifyGuide publicKey={publicKey} snippet={snippet} />
+        </>
     );
 }
 
@@ -1197,7 +1201,7 @@ function DomainsCard({ domains }: { domains: string[] }) {
             <div className="card-h">
                 <div>
                     <h3>Allowed websites</h3>
-                    <p>Only these sites (and their subdomains) can show your call button, so nobody can copy your code and spend your balance. Leave empty to allow any site.</p>
+                    <p>Only these sites (and their subdomains) can show your call button, so nobody can copy your code and use your plan. On Shopify add both your-store.myshopify.com and your own domain. Leave empty to allow any site.</p>
                 </div>
             </div>
             <div className="card-b stack">

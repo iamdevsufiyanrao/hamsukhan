@@ -77,7 +77,10 @@ class SettingsController extends Controller
             };
         }
         $rules['seo_ga_id'] = ['nullable', 'regex:/^(G|UA|GT)-[A-Z0-9-]{4,20}$/i'];
-        $rules['rate_per_minute'] = ['nullable', 'numeric', 'min:0.01', 'max:5'];
+        $rules['basic_price_pkr'] = $rules['business_price_pkr'] = ['nullable', 'integer', 'min:100', 'max:1000000'];
+        // 0 = no fair-use limit (truly unlimited).
+        $rules['basic_fair_use_minutes'] = $rules['business_fair_use_minutes'] = ['nullable', 'integer', 'min:0', 'max:100000'];
+        $rules['trial_days'] = ['nullable', 'integer', 'min:0', 'max:60'];
         $rules['connectors_max_per_bot'] = ['nullable', 'integer', 'min:1', 'max:50'];
         $rules['mail_mailer'] = ['nullable', 'in:smtp,log'];
         $rules['mail_scheme'] = ['nullable', 'in:smtp,smtps'];

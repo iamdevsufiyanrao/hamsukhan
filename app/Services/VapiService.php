@@ -84,6 +84,15 @@ class VapiService
         $bot->forceFill(['vapi_assistant_id' => $response->json('id'), 'synced_at' => now(), 'sync_error' => null])->save();
     }
 
+    /** Removes the bot's assistant on Vapi when its store is deleted. Best effort: a leftover assistant costs nothing. */
+    public function deleteAssistant(Bot $bot): void
+    {
+        if (! $this->enabled() || ! $bot->vapi_assistant_id || str_starts_with($bot->vapi_assistant_id, 'sim_')) {
+            return;
+        }
+        rescue(fn () => $this->http()->delete("/assistant/{$bot->vapi_assistant_id}")->throw());
+    }
+
     /** @return list<string> dotted paths from messages like "analysisPlan.property summaryPrompt should not exist" */
     private function unknownProperties(mixed $messages): array
     {
@@ -136,19 +145,21 @@ class VapiService
             'maxDurationSeconds' => $bot->max_call_minutes * 60,
             'silenceTimeoutSeconds' => 30,
             'backgroundDenoisingEnabled' => true,
-            'model' => array_filter([
-                'provider' => 'openai',
-                'model' => config('hamsukhan.vapi.model'),
-                'temperature' => 0.3,
-                'messages' => [['role' => 'system', 'content' => $bot->systemPrompt()]],
-                'tools' => array_merge($this->liveBookingTools($bot), $this->transferTools($bot)) ?: null,
-            ]),
+            'model' => $this->modelPayload($bot, $bot->systemPrompt()),
             'voice' => [
                 'provider' => '11labs',
                 'voiceId' => $this->voiceIdFor($bot),
                 'model' => config('hamsukhan.elevenlabs.model'),
+                // Start speaking from the first words instead of waiting for whole sentences (3 keeps number/date normalising on).
+                'optimizeStreamingLatency' => 3,
             ],
             'transcriber' => $transcriber,
+            // When the caller stops talking, answer quickly. Vapi's default waits 1.5 s after any phrase without
+            // punctuation, and the Urdu transcriber rarely punctuates, so every answer started late.
+            'startSpeakingPlan' => [
+                'waitSeconds' => 0.4,
+                'transcriptionEndpointingPlan' => ['onPunctuationSeconds' => 0.1, 'onNoPunctuationSeconds' => 0.8, 'onNumberSeconds' => 0.6],
+            ],
             'server' => array_filter([
                 'url' => route('webhooks.vapi'),
                 'secret' => config('hamsukhan.vapi.webhook_secret'),
@@ -168,6 +179,20 @@ class VapiService
 
         // Vapi rejects explicit nulls for optional fields.
         return array_filter($payload, fn ($v) => $v !== null && $v !== '');
+    }
+
+    /** The LLM part of the assistant (inbound and outbound calls share it, so callbacks answer as fast as website calls). */
+    private function modelPayload(Bot $bot, string $systemPrompt): array
+    {
+        return array_filter([
+            'provider' => 'openai',
+            'model' => config('hamsukhan.vapi.model'),
+            'temperature' => 0.3,
+            // Spoken answers are a sentence or two; the cap stops long monologues the voice would have to read out.
+            'maxTokens' => 250,
+            'messages' => [['role' => 'system', 'content' => $systemPrompt]],
+            'tools' => array_merge($this->liveBookingTools($bot), $this->transferTools($bot)) ?: null,
+        ]);
     }
 
     /** Vapi's built-in transfer to the owner's number (phone calls only; on website calls the bot takes a callback instead). */
@@ -279,12 +304,7 @@ class VapiService
                     'firstMessage' => $firstMessage,
                     'maxDurationSeconds' => $maxSeconds,
                     'metadata' => ['botId' => $bot->id, 'outbound' => $purpose] + $metadata,
-                    'model' => array_filter([
-                        'provider' => 'openai',
-                        'model' => config('hamsukhan.vapi.model'),
-                        'messages' => [['role' => 'system', 'content' => $bot->systemPrompt()."\n\nThis is an OUTBOUND call you are making. Purpose: {$purpose}. Be brief, say who you are first, and end the call politely if it is a bad time."]],
-                        'tools' => array_merge($this->liveBookingTools($bot), $this->transferTools($bot)) ?: null,
-                    ]),
+                    'model' => $this->modelPayload($bot, $bot->systemPrompt()."\n\nThis is an OUTBOUND call you are making. Purpose: {$purpose}. Be brief, say who you are first, and end the call politely if it is a bad time."),
                 ],
             ])->throw()->json();
         } catch (\Throwable $e) {
@@ -316,6 +336,8 @@ class VapiService
             ],
             [
                 'type' => 'function',
+                // Saving the booking (and the calendar event) takes a moment: say something so the line is never silent.
+                'messages' => [['type' => 'request-start', 'content' => 'Ji, main aap ki booking kar rahi hoon.']],
                 'function' => [
                     'name' => 'book_appointment',
                     'description' => 'Book a free time for the caller. Only after check_availability, and after the caller agreed to the time and gave their name and phone number.',

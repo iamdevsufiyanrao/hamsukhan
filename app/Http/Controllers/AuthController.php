@@ -79,6 +79,9 @@ class AuthController extends Controller
                 'password' => $data['password'],
                 'terms_accepted_at' => now(),
             ]);
+            if (($trial = (int) config('hamsukhan.trial_days')) > 0) {
+                $user->forceFill(['plan' => 'basic', 'plan_expires_at' => now()->addDays($trial)])->save();
+            }
             $provisioner->provision($user);
 
             return $user;

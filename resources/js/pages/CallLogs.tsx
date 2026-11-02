@@ -11,7 +11,7 @@ type Filters = { q: string; status: string; days: number; per: number };
 type Props = {
     calls: { data: CallRowData[]; page: number; lastPage: number; total: number; from: number | null; to: number | null };
     filters: Filters;
-    summary: { total: number; talkMinutes: number; spend: number; completedPct: number };
+    summary: { total: number; talkMinutes: number; completedPct: number };
 };
 
 /** Server-side filtering + pagination; the URL holds the filters so links and refresh keep them. */
@@ -44,7 +44,7 @@ export default function CallLogs({ calls, filters, summary }: Props) {
         <>
             <Head title="Call Logs" />
             <LiveCallsPanel />
-            <div className="summary-row">
+            <div className="summary-row three">
                 <div className="card">
                     <small>Total calls</small>
                     <strong className="num">{summary.total}</strong>
@@ -52,10 +52,6 @@ export default function CallLogs({ calls, filters, summary }: Props) {
                 <div className="card">
                     <small>Talk time</small>
                     <strong className="num">{summary.talkMinutes} min</strong>
-                </div>
-                <div className="card">
-                    <small>Total spend</small>
-                    <strong className="num">${summary.spend.toFixed(2)}</strong>
                 </div>
                 <div className="card">
                     <small>Completed</small>
@@ -101,7 +97,6 @@ export default function CallLogs({ calls, filters, summary }: Props) {
                                 <th>Outcome</th>
                                 <th>Duration</th>
                                 <th>Status</th>
-                                <th className="r">Cost</th>
                                 <th />
                             </tr>
                         </thead>
@@ -110,7 +105,7 @@ export default function CallLogs({ calls, filters, summary }: Props) {
                                 calls.data.map((c) => <CallRow key={c.id} call={c} full onOpen={setOpenCall} />)
                             ) : (
                                 <tr style={{ cursor: 'default' }}>
-                                    <td colSpan={7}>
+                                    <td colSpan={6}>
                                         <div className="empty">No calls match your filters.</div>
                                     </td>
                                 </tr>

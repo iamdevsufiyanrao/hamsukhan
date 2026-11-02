@@ -14,10 +14,10 @@ class PhoneFeaturesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function live(float $balance = 10)
+    private function live(?string $plan = 'basic')
     {
         config(['hamsukhan.vapi.private_key' => 'vk', 'hamsukhan.vapi.public_key' => 'pk', 'hamsukhan.vapi.webhook_secret' => 's', 'hamsukhan.vapi.phone_number_id' => 'pn_platform']);
-        $user = $this->customer($balance);
+        $user = $this->customer($plan);
         $user->bot->forceFill(['vapi_assistant_id' => 'asst_1', 'sync_error' => null])->save();
 
         return $user->fresh();
@@ -55,11 +55,11 @@ class PhoneFeaturesTest extends TestCase
         $this->actingAs($this->customer())->post("/bookings/{$booking->id}/ai-callback")->assertNotFound();
     }
 
-    public function test_ai_callback_needs_balance(): void
+    public function test_ai_callback_needs_an_active_plan(): void
     {
-        $user = $this->live(0);
+        $user = $this->live(null);
         $booking = $user->bot->bookings()->create(['customer_name' => 'A', 'phone' => '+923001234567', 'request' => 'x']);
-        $this->actingAs($user)->post("/bookings/{$booking->id}/ai-callback")->assertSessionHas('error', fn ($m) => str_contains($m, 'balance'));
+        $this->actingAs($user)->post("/bookings/{$booking->id}/ai-callback")->assertSessionHas('error', fn ($m) => str_contains($m, 'plan is not active'));
     }
 
     public function test_reminder_calls_go_out_once_inside_the_window(): void
@@ -96,7 +96,7 @@ class PhoneFeaturesTest extends TestCase
 
     public function test_phone_calls_are_logged_with_direction_and_number(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $this->postJson('/api/webhooks/vapi', ['message' => [
             'type' => 'end-of-call-report', 'durationSeconds' => 60,
             'call' => ['id' => 'ph_1', 'type' => 'inboundPhoneCall', 'customer' => ['number' => '+923001234567'], 'metadata' => ['botId' => $user->bot->id]],

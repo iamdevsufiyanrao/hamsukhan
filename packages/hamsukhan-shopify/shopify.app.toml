@@ -1,0 +1,23 @@
+# Shopify app config for the Hamsukhan voice assistant.
+# Run `shopify app config link` once to fill in client_id from your Partner dashboard. No secrets live in this file.
+client_id = "REPLACE_WITH_YOUR_SHOPIFY_CLIENT_ID"
+name = "Hamsukhan voice assistant"
+application_url = "https://hamsukhan.techvocalz.com"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
+
+[access_scopes]
+# The app only adds a theme app embed; it reads and writes no store data.
+scopes = ""
+
+[auth]
+redirect_urls = ["https://hamsukhan.techvocalz.com/login"]
+
+[webhooks]
+api_version = "2025-01"
+
+[pos]
+embedded = false

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -14,7 +15,7 @@ class HandleInertiaRequests extends Middleware
         return parent::version($request);
     }
 
-    /** Props every page receives: the signed-in user, wallet summary, badge counts and flash messages. */
+    /** Props every page receives: the signed-in user, plan, stores, badge counts and flash messages. */
     public function share(Request $request): array
     {
         $user = $request->user();
@@ -32,12 +33,10 @@ class HandleInertiaRequests extends Middleware
                     'verified' => $user->hasVerifiedEmail(),
                     'teamRole' => $user->team_role,
                 ],
-                'wallet' => [
-                    'balance' => (float) $user->account()->balance,
-                    'minutesLeft' => $user->account()->minutesLeft(),
-                    'low' => (float) $user->account()->balance < config('hamsukhan.low_balance_usd'),
-                ],
-                'bot' => $user->bot ? ['publicKey' => $user->bot->public_key] : null,
+                'plan' => $this->plan($user->account()),
+                'bot' => $user->bot ? ['id' => $user->bot->id, 'publicKey' => $user->bot->public_key, 'name' => $user->bot->business_name ?: 'Store #'.$user->bot->id] : null,
+                // For the store switcher in the sidebar.
+                'stores' => $user->is_admin ? [] : $user->bots()->get(['id', 'business_name'])->map(fn ($b) => ['id' => $b->id, 'name' => $b->business_name ?: 'Store #'.$b->id]),
                 'impersonator' => ($id = $request->session()->get('impersonator_id')) ? \App\Models\User::find($id, ['id', 'name'])?->only('name') : null,
                 'badges' => [
                     'newBookings' => $user->bot?->bookings()->where('status', 'new')->count() ?? 0,
@@ -62,17 +61,22 @@ class HandleInertiaRequests extends Middleware
                 'demoBotKey' => filled(config('hamsukhan.vapi.private_key')) ? config('hamsukhan.demo.bot_key') : null,
             ],
             'config' => [
-                'ratePerMinute' => config('hamsukhan.rate_per_minute'),
-                'minTopUp' => config('hamsukhan.min_topup_usd'),
-                // Rounded PKR prices for public pages (the exchange rate itself stays private).
-                'ratePerMinutePkr' => (int) round(config('hamsukhan.rate_per_minute') * config('hamsukhan.pkr_per_usd')),
-                'minTopUpPkr' => (int) round(config('hamsukhan.min_topup_usd') * config('hamsukhan.pkr_per_usd')),
-                // Payment details are only for signed-in users; public pages never carry them.
-                ...($user ? [
-                    'pkrPerUsd' => config('hamsukhan.pkr_per_usd'),
-                    'accounts' => collect(config('hamsukhan.payment_accounts'))->map(fn ($a, $k) => $a + ['id' => $k])->values(),
-                ] : []),
+                // Public prices for the landing page (the fair-use limits stay private).
+                'plans' => collect(config('hamsukhan.plans'))->map(fn ($p, $k) => ['id' => $k, 'name' => $p['name'], 'pricePkr' => $p['price_pkr'], 'stores' => $p['stores'], 'users' => $p['users']])->values(),
+                'trialDays' => (int) config('hamsukhan.trial_days'),
             ],
+        ];
+    }
+
+    private function plan(User $account): array
+    {
+        $plan = $account->activePlan();
+
+        return [
+            'active' => $plan !== null,
+            'name' => $plan ? $account->planLimits()['name'] : null,
+            'expiresAt' => $account->plan_expires_at?->toIso8601String(),
+            'daysLeft' => $plan ? (int) ceil(now()->diffInDays($account->plan_expires_at, true)) : 0,
         ];
     }
 }

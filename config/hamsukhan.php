@@ -3,13 +3,16 @@
 return [
 
     /*
-    | Billing. The wallet is kept in USD because Vapi bills in USD.
-    | Manual top-ups are paid in PKR and converted with `pkr_per_usd`.
+    | Billing: a monthly subscription, paid manually in PKR (JazzCash / Easypaisa / bank → admin approves).
+    | Calls are unlimited; `fair_use_minutes` is a hidden monthly safety limit per account (null = no limit),
+    | because every minute still costs us Vapi + ElevenLabs + LLM. The super admin can change all of it.
     */
-    'rate_per_minute' => (float) env('HAMSUKHAN_RATE_PER_MINUTE', 0.12),
-    'min_topup_usd' => (float) env('HAMSUKHAN_MIN_TOPUP_USD', 5),
-    'pkr_per_usd' => (float) env('HAMSUKHAN_PKR_PER_USD', 280),
-    'low_balance_usd' => (float) env('HAMSUKHAN_LOW_BALANCE_USD', 5),
+    'plans' => [
+        'basic' => ['name' => 'Basic', 'price_pkr' => (int) env('HAMSUKHAN_BASIC_PRICE', 3000), 'stores' => 1, 'users' => 1, 'fair_use_minutes' => (int) env('HAMSUKHAN_BASIC_MINUTES', 1500) ?: null],
+        'business' => ['name' => 'Business', 'price_pkr' => (int) env('HAMSUKHAN_BUSINESS_PRICE', 25000), 'stores' => 5, 'users' => 5, 'fair_use_minutes' => (int) env('HAMSUKHAN_BUSINESS_MINUTES', 10000) ?: null],
+    ],
+    // Days of free Basic plan for a new sign-up (0 = none, they pay before the first call).
+    'trial_days' => (int) env('HAMSUKHAN_TRIAL_DAYS', 0),
     'max_cloned_voices' => 5,
     'min_clone_seconds' => 30,
 
@@ -31,7 +34,8 @@ return [
         'public_key' => env('VAPI_PUBLIC_KEY'),
         'webhook_secret' => env('VAPI_WEBHOOK_SECRET'),
         'base_url' => env('VAPI_BASE_URL', 'https://api.vapi.ai'),
-        'model' => env('VAPI_MODEL', 'gpt-4o'),
+        // Fast model: gpt-4o answered noticeably slower, which callers heard as pauses mid-call.
+        'model' => env('VAPI_MODEL', 'gpt-4.1-mini'),
         // Default Vapi phone number (id) for outbound AI calls when the bot has no number of its own.
         'phone_number_id' => env('VAPI_PHONE_NUMBER_ID'),
         // Raw PCM (16-bit little-endian) format of the live-listen stream. Vapi does not document it; adjust after a test call
@@ -43,7 +47,8 @@ return [
     'elevenlabs' => [
         'api_key' => env('ELEVENLABS_API_KEY'),
         'base_url' => env('ELEVENLABS_BASE_URL', 'https://api.elevenlabs.io'),
-        'model' => env('ELEVENLABS_MODEL', 'eleven_multilingual_v2'),
+        // Flash is ElevenLabs' low-latency model (~75 ms); multilingual_v2 added a long gap before every answer.
+        'model' => env('ELEVENLABS_MODEL', 'eleven_flash_v2_5'),
     ],
 
     /*
@@ -71,10 +76,10 @@ return [
     ],
 
     /*
-    | Owner alerts. Low-balance alerts fire once each time the balance drops below each threshold (USD).
+    | Owner alerts. A renewal reminder goes out this many days before the plan ends.
     */
     'notifications' => [
-        'low_balance_thresholds' => [5, 1],
+        'renewal_reminder_days' => 3,
         'daily_summary_at' => '21:00', // Asia/Karachi
     ],
 

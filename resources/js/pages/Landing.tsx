@@ -91,7 +91,7 @@ const FEATURES: { icon: IconName; title: string; text: string }[] = [
     { icon: 'shield', title: 'Safe, approved answers', text: 'It says it is an AI, only quotes your approved prices and hours, and offers a callback from your team when unsure.' },
     { icon: 'plug', title: 'Sends to your software', text: 'Signed webhooks, field mapping and a ready PHP package push each booking into your own system.' },
     { icon: 'book', title: 'Knows your answers', text: 'Menus, price lists, FAQs and policies. Upload them once and the bot uses them on every call.' },
-    { icon: 'wallet', title: 'Pay only for talk time', text: 'No monthly plan. Top up in Rupees by JazzCash, Easypaisa or bank. Failed connections are never billed.' },
+    { icon: 'wallet', title: 'One monthly price, unlimited calls', text: 'Basic or Business plan, paid in Rupees by JazzCash, Easypaisa or bank. No per-minute bills, no surprises.' },
 ];
 
 const TOPICS: [string, string][] = [
@@ -396,14 +396,15 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
     const { auth, site, config } = usePage<SharedProps>().props;
     const { dark, toggle } = useTheme();
     const [demo, setDemo] = useState(DEMOS[0]);
-    const [minutes, setMinutes] = useState(300);
     const [faq, setFaq] = useState<number | null>(0);
     const [menu, setMenu] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const progress = useRef<HTMLDivElement>(null);
     const art = useRef<HTMLDivElement>(null);
     const name = site.name || 'Hamsukhan';
-    const rate = config.ratePerMinutePkr;
+    // Plans come from the server (the super admin can change prices); fair-use limits are never sent here.
+    const { plans, trialDays } = config;
+    const basic = plans.find((p) => p.id === 'basic') ?? plans[0];
     const startHref = auth ? '/dashboard' : site.allowSignups ? '/register' : '/login';
     const startLabel = auth ? 'Open dashboard' : site.allowSignups ? 'Start free pilot' : 'Log in';
     const wa = site.whatsapp ? `https://wa.me/${site.whatsapp.replace(/\D/g, '').replace(/^0/, '92')}` : null;
@@ -435,8 +436,9 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
         ['What if the AI does not know an answer?', 'It only quotes the prices, hours and policies you approved. When it is unsure it says so and takes a callback request with the caller\u2019s name and WhatsApp number, so your team can follow up.'],
         ['Do I have to clone my voice?', 'No. Every bot starts with a professional voice. Voice cloning is optional and only for your own voice, or one you have clear permission to use; we record that consent.'],
         ['Can bookings go into my own software?', 'Yes. Every booking or order can be delivered to your system with a signed webhook, mapped to your own form fields. If your server is down we retry automatically. There is also a ready package for Laravel and plain PHP.'],
-        ['How does billing work?', `There is no monthly plan. You top up your wallet in Rupees and calls are charged at about ${rs(rate)} per minute of talk time, billed by the second. Billable time starts when the call connects and ends when it ends. Failed connections and the website demo are never charged. Top-ups start from about ${rs(config.minTopUpPkr)}. Payment fees and taxes, if any, are shown on your top-up receipt.`],
-        ['What if my balance runs low?', 'You get a low balance warning in your dashboard well before it runs out. A call only starts when the balance covers it, and its maximum length is capped to what you can afford, so you never end up owing money.'],
+        ['How does billing work?', `A flat monthly plan, paid in advance: ${plans.map((p) => `${p.name} ${rs(p.pricePkr)}/month (${p.stores} store${p.stores > 1 ? 's' : ''}, ${p.users} user${p.users > 1 ? 's' : ''})`).join(' or ')}. Calls are unlimited under a fair-use policy, so there is no per-minute bill. You pay by JazzCash, Easypaisa or bank transfer and the plan switches on once we verify the payment.`],
+        ['How do I renew?', 'Renew from the Billing page for 1, 3, 6 or 12 months at a time. We remind you a few days before your plan ends. If it ends, your assistant stops taking calls until you renew; your settings, calls and bookings stay safe.'],
+        ['Does it work on Shopify?', 'Yes. It works on any website: add one line of code, or on Shopify turn on the Hamsukhan app embed in your theme and paste your bot key. The Business plan lets you run up to 5 stores from one login.'],
     ];
 
     const go = (id: string) => {
@@ -670,9 +672,9 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                 </Reveal>
                 <Reveal delay={160}>
                     <strong>
-                        <CountUp to={rate} prefix="Rs " />
+                        <CountUp to={basic?.pricePkr ?? 0} prefix="Rs " />
                     </strong>
-                    <span>About per minute of talk time, billed by the second</span>
+                    <span>A month on the Basic plan, unlimited calls</span>
                 </Reveal>
                 <Reveal delay={240}>
                     <strong>
@@ -838,58 +840,44 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                     <Reveal className="lp-head">
                         <span className="lp-kicker">Pricing</span>
                         <h2>
-                            Simple. <em className="lp-serif">Pay as you talk.</em>
+                            Simple. <em className="lp-serif">One monthly price.</em>
                         </h2>
-                        <p>No plans, no contracts, no setup fee. Top up in Rupees and pay only for the minutes your receptionist spends talking.</p>
+                        <p>Unlimited calls on every plan, no per-minute bills and no setup fee. Pay in Rupees by JazzCash, Easypaisa or bank transfer.</p>
                     </Reveal>
                     <div className="lp-pricing">
-                        <Reveal className="lp-price-card">
-                            <div className="lp-price-top">
-                                <span className="lp-chip">Pay per minute</span>
-                                <div className="lp-price">
-                                    <strong>{rs(rate)}</strong>
-                                    <span>/ minute</span>
+                        {plans.map((p, i) => (
+                            <Reveal key={p.id} className="lp-price-card" delay={i * 120}>
+                                <div className="lp-price-top">
+                                    <span className="lp-chip">{p.name}</span>
+                                    <div className="lp-price">
+                                        <strong>{rs(p.pricePkr)}</strong>
+                                        <span>/ month</span>
+                                    </div>
+                                    <p>
+                                        {p.stores === 1 ? '1 store (website)' : `Up to ${p.stores} stores (websites)`} · {p.users === 1 ? '1 user' : `${p.users} users`}
+                                    </p>
                                 </div>
-                                <p>Top up from {rs(config.minTopUpPkr)} by JazzCash, Easypaisa or bank transfer.</p>
-                            </div>
-                            <ul className="lp-list">
-                                {['Billed by the second from the moment the call connects', 'Never billed: failed connections, silence before connecting, the website demo', 'A call only starts if your balance covers it; its length is capped to your balance', 'Low-balance warning in your dashboard', 'Professional voice included, own voice clone optional', 'Recordings, transcripts, bookings and callbacks'].map((x) => (
-                                    <li key={x}>
-                                        <Icon name="check" className="i i-sm" />
-                                        {x}
-                                    </li>
-                                ))}
-                            </ul>
-                            <Link href={startHref} className="btn btn-primary btn-lg lp-full lp-shine">
-                                {auth ? 'Open dashboard' : 'Start a 30-day pilot'}
-                            </Link>
-                        </Reveal>
-
-                        <Reveal className="lp-calc" delay={120}>
-                            <h3>Estimate your monthly cost</h3>
-                            <p>Drag to the number of conversation minutes you expect in a month. Estimates only, payment fees and taxes are not included.</p>
-                            <div className="lp-calc-val">
-                                <span className="num">{minutes.toLocaleString()}</span> minutes
-                            </div>
-                            <input type="range" min={50} max={3000} step={50} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label="Minutes per month" style={{ '--p': `${((minutes - 50) / 2950) * 100}%` } as CSSProperties} />
-                            <div className="lp-calc-grid">
-                                <div>
-                                    <small>About</small>
-                                    <strong className="num">{Math.round(minutes / 2).toLocaleString()}</strong>
-                                    <span>calls of 2 minutes</span>
-                                </div>
-                                <div>
-                                    <small>You pay</small>
-                                    <strong className="num">{rs(minutes * rate)}</strong>
-                                    <span>per month</span>
-                                </div>
-                                <div>
-                                    <small>Per booking</small>
-                                    <strong className="num">{rs((minutes * rate) / Math.max(1, Math.round(minutes / 2 / 4)))}</strong>
-                                    <span>if 1 in 4 calls books</span>
-                                </div>
-                            </div>
-                        </Reveal>
+                                <ul className="lp-list">
+                                    {[
+                                        'Unlimited calls (fair use)',
+                                        p.stores > 1 ? `${p.stores} stores, each with its own assistant, voice and widget` : 'One assistant on your website',
+                                        p.users > 1 ? `You plus ${p.users - 1} team members with their own login and role` : 'Your own login',
+                                        'Works on any website, including Shopify',
+                                        'Professional voice included, own voice clone optional',
+                                        'Recordings, transcripts, bookings and callbacks',
+                                        'Renew for 1, 3, 6 or 12 months',
+                                    ].map((x) => (
+                                        <li key={x}>
+                                            <Icon name="check" className="i i-sm" />
+                                            {x}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <Link href={startHref} className={'btn btn-lg lp-full ' + (i === 0 ? 'btn-primary lp-shine' : 'btn-ghost')}>
+                                    {auth ? 'Open dashboard' : trialDays > 0 ? `Start ${trialDays}-day free trial` : `Get ${p.name}`}
+                                </Link>
+                            </Reveal>
+                        ))}
                     </div>
                 </div>
             </section>

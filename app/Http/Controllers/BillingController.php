@@ -3,30 +3,33 @@
 namespace App\Http\Controllers;
 
 use App\Models\TopUp;
-use App\Models\WalletTransaction;
+use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/** The owner's monthly plan: what they have, how much they used, and paying for (or renewing) a plan. */
 class BillingController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, SubscriptionService $subscriptions): Response
     {
         $user = $request->user();
 
         return Inertia::render('Billing', [
-            'transactions' => $user->transactions()->latest('created_at')->latest('id')->limit(50)->get()->map(fn (WalletTransaction $t) => [
+            'subscription' => $subscriptions->summary($user) + ['storesUsed' => $user->bots()->count(), 'usersUsed' => $user->members()->count() + 1],
+            'plans' => collect($subscriptions->plans())->map(fn ($p, $k) => [
+                'id' => $k,
+                'name' => $p['name'],
+                'pricePkr' => $p['price_pkr'],
+                'stores' => $p['stores'],
+                'users' => $p['users'],
+            ])->values(),
+            'payments' => $user->topUps()->latest()->limit(10)->get()->map(fn (TopUp $t) => [
                 'id' => $t->id,
-                'date' => $t->created_at->toIso8601String(),
-                'text' => $t->description,
-                'type' => $t->type,
-                'amount' => (float) $t->amount,
-            ]),
-            'topUps' => $user->topUps()->latest()->limit(10)->get()->map(fn (TopUp $t) => [
-                'id' => $t->id,
-                'amountUsd' => (float) $t->amount_usd,
+                'plan' => $t->planName(),
+                'months' => $t->months,
                 'amountPkr' => (float) $t->amount_pkr,
                 'method' => $t->methodLabel(),
                 'reference' => $t->reference,
@@ -34,40 +37,35 @@ class BillingController extends Controller
                 'note' => $t->admin_note,
                 'createdAt' => $t->created_at->toIso8601String(),
             ]),
-            'pricing' => [
-                'ratePerMinute' => config('hamsukhan.rate_per_minute'),
-                'minTopUp' => config('hamsukhan.min_topup_usd'),
-                'pkrPerUsd' => config('hamsukhan.pkr_per_usd'),
-                'lowBalance' => config('hamsukhan.low_balance_usd'),
-                'maxVoices' => config('hamsukhan.max_cloned_voices'),
-            ],
             'accounts' => collect(config('hamsukhan.payment_accounts'))->map(fn ($a, $k) => $a + ['id' => $k])->values(),
         ]);
     }
 
-    /** Manual top-up: the customer already sent money and submits the reference + screenshot for review. */
-    public function storeTopUp(Request $request): RedirectResponse
+    /** Manual payment: the owner already sent the plan price and submits the reference + screenshot for review. */
+    public function storePayment(Request $request, SubscriptionService $subscriptions): RedirectResponse
     {
         $user = $request->user();
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:'.config('hamsukhan.min_topup_usd'), 'max:1000'],
+            'plan' => ['required', Rule::in(array_keys($subscriptions->plans()))],
+            'months' => ['required', 'integer', Rule::in([1, 3, 6, 12])],
             'method' => ['required', Rule::in(TopUp::METHODS)],
             'reference' => ['required', 'string', 'max:60'],
             'proof' => ['required', 'image', 'max:4096'],
         ]);
 
         if ($user->topUps()->where('status', 'pending')->count() >= 3) {
-            return back()->withErrors(['amount' => 'You already have 3 top-ups waiting for review.']);
+            return back()->withErrors(['reference' => 'You already have 3 payments waiting for review.']);
         }
 
         $user->topUps()->create([
-            'amount_usd' => round($data['amount'], 2),
-            'amount_pkr' => round($data['amount'] * config('hamsukhan.pkr_per_usd')),
+            'plan' => $data['plan'],
+            'months' => $data['months'],
+            'amount_pkr' => $subscriptions->priceFor($data['plan'], $data['months']),
             'method' => $data['method'],
             'reference' => $data['reference'],
             'proof_path' => $request->file('proof')->store("top-ups/{$user->id}"),
         ]);
 
-        return back()->with('success', 'Payment submitted, your balance updates once we verify it (usually within a few hours).');
+        return back()->with('success', 'Payment submitted, your plan switches on once we verify it (usually within a few hours).');
     }
 }

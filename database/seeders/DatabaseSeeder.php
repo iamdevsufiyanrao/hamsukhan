@@ -21,12 +21,9 @@ use Illuminate\Support\Facades\Storage;
  */
 class DatabaseSeeder extends Seeder
 {
-    private float $rate;
-
     public function run(): void
     {
         mt_srand(42);
-        $this->rate = config('hamsukhan.rate_per_minute');
 
         DB::transaction(function () {
             $admin = User::create(['name' => 'Hamsukhan Admin', 'email' => 'admin@hamsukhan.test', 'password' => 'password', 'terms_accepted_at' => now()]);
@@ -36,11 +33,11 @@ class DatabaseSeeder extends Seeder
             $sana = $this->bloomSalon();
             $this->karachiGrill();
 
-            // Reviewed history + one pending payment waiting for the admin.
-            $this->pendingTopUp($aemal, 10, 'jazzcash', 'JC-88213409', 0);
-            $this->pendingTopUp($sana, 20, 'easypaisa', 'EP-55102377', 2);
+            // Reviewed history + payments waiting for the admin.
+            $this->pendingPayment($aemal, 'business', 1, 'jazzcash', 'JC-88213409', 0);
+            $this->pendingPayment($sana, 'basic', 3, 'easypaisa', 'EP-55102377', 2);
             $sana->topUps()->create([
-                'amount_usd' => 15, 'amount_pkr' => 15 * config('hamsukhan.pkr_per_usd'), 'method' => 'bank', 'reference' => 'FT-0099',
+                'plan' => 'basic', 'months' => 1, 'amount_pkr' => config('hamsukhan.plans.basic.price_pkr'), 'method' => 'bank', 'reference' => 'FT-0099',
                 'status' => 'rejected', 'reviewed_by' => $admin->id, 'reviewed_at' => now()->subDays(3), 'admin_note' => 'Amount not received in bank account',
                 'created_at' => now()->subDays(4),
             ]);
@@ -83,7 +80,9 @@ class DatabaseSeeder extends Seeder
             'Repair FAQ.md' => "# Smart Geeks FAQ\n\n**How long does a repair take?** Most repairs are same day. Screens take 1–2 days.\n\n**Do you give a warranty?** 90 days on parts and labour.\n\n**Can I walk in?** Yes, Mon–Sat 10am–8pm.\n",
         ]);
 
-        $this->history($user, $bot, days: 60, perDay: [3, 9], todayCalls: 13, topUps: [[60, 50, 'bank', 'FT-20431'], [34, 25, 'jazzcash', 'JC-77310021'], [11, 25, 'easypaisa', 'EP-44019875']]);
+        $this->history($user, $bot, days: 60, perDay: [3, 9], todayCalls: 13, payments: [[60, 'basic', 1, 'bank', 'FT-20431'], [30, 'business', 3, 'jazzcash', 'JC-77310021']]);
+        // Business plan: a second store with its own assistant (no calls yet).
+        $user->bots()->create(['business_name' => 'Smart Geeks · DHA branch', 'website' => 'dha.smartgeeks.io', 'greeting' => 'Hi, Smart Geeks DHA here! How can I help?', 'end_message' => 'Thanks for calling Smart Geeks!', 'language' => 'Urdu + English', 'prompt' => $bot->prompt, 'preset_voice' => config('hamsukhan.preset_voices.0.id'), 'vapi_assistant_id' => 'sim_asst_dha']);
 
         // Their own repair-shop software receives every booking/order through the Laravel connector.
         $crm = $bot->integrations()->create(['name' => 'Shop CRM (Laravel)', 'kind' => 'webhook', 'url' => 'https://crm.smartgeeks.io/hamsukhan/webhook', 'events' => ['booking.created', 'order.created'], 'secret' => 'whsec_demo_smartgeeks_crm_0000000000000000']);
@@ -110,7 +109,7 @@ class DatabaseSeeder extends Seeder
             'synced_at' => now()->subDays(1),
         ]);
         $this->knowledge($bot, ['Menu.csv' => "Item,Price (PKR)\nGrill platter (large),3200\nMixed BBQ platter,2800\nSeekh kebab platter,1900\nChicken tikka platter,1700\nHalf chicken karahi,1600\nGarlic naan,120\nRoti,40\nMint margarita,350\nFresh lime,250\nLassi,300\n"]);
-        $this->history($user, $bot, days: 21, perDay: [4, 10], todayCalls: 6, topUps: [[22, 25, 'jazzcash', 'JC-50311002']], set: 'restaurant');
+        $this->history($user, $bot, days: 21, perDay: [4, 10], todayCalls: 6, payments: [[22, 'basic', 1, 'jazzcash', 'JC-50311002']], set: 'restaurant');
 
         // Their POS has a plain HTML order form, the form connector fills it field by field.
         $pos = $bot->integrations()->create([
@@ -166,7 +165,7 @@ class DatabaseSeeder extends Seeder
             'vapi_assistant_id' => 'sim_asst_bloom',
             'synced_at' => now()->subDays(1),
         ]);
-        $this->history($user, $bot, days: 8, perDay: [0, 3], todayCalls: 2, topUps: [[9, 10, 'easypaisa', 'EP-10022']]);
+        $this->history($user, $bot, days: 8, perDay: [0, 3], todayCalls: 2, payments: [[9, 'basic', 1, 'easypaisa', 'EP-10022']]);
 
         return $user;
     }
@@ -189,10 +188,10 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * Calls during business hours (10:00–20:00 PKT, closed Sunday), with a wallet ledger that
-     * replays top-ups and per-call charges in time order, exactly like WalletService would.
+     * Calls during business hours (10:00–20:00 PKT, closed Sunday), plus the approved plan payments;
+     * the last payment decides the plan and its end date.
      */
-    private function history(User $user, Bot $bot, int $days, array $perDay, int $todayCalls, array $topUps, string $set = 'repair'): void
+    private function history(User $user, Bot $bot, int $days, array $perDay, int $todayCalls, array $payments, string $set = 'repair'): void
     {
         $tz = $user->timezone;
         $scenarios = CallScenarios::all($set);
@@ -200,8 +199,10 @@ class DatabaseSeeder extends Seeder
         $weights = $set === 'restaurant' ? [6, 4, 2, 2, 1] : [4, 4, 4, 2, 3, 2, 2, 3];
         $events = [];
 
-        foreach ($topUps as [$ago, $usd, $method, $ref]) {
-            $events[] = ['at' => now($tz)->subDays($ago)->setTime(10, 15), 'topup' => [$usd, $method, $ref]];
+        foreach ($payments as [$ago, $plan, $months, $method, $ref]) {
+            $at = now($tz)->subDays($ago)->setTime(10, 15);
+            $this->approvedPayment($user, $plan, $months, $method, $ref, $at->copy()->utc());
+            $user->forceFill(['plan' => $plan, 'plan_expires_at' => $at->copy()->utc()->addMonthsNoOverflow($months)])->save();
         }
 
         $nowLocal = now($tz);
@@ -223,28 +224,15 @@ class DatabaseSeeder extends Seeder
 
         usort($events, fn ($a, $b) => $a['at'] <=> $b['at']);
 
-        $balance = 0.0;
         $n = 0;
         foreach ($events as $e) {
             $at = $e['at']->copy()->utc();
-
-            if (isset($e['topup'])) {
-                [$usd, $method, $ref] = $e['topup'];
-                $balance = $this->credit($user, $usd, $method, $ref, $at, $balance);
-
-                continue;
-            }
-
             $n++;
             $failed = mt_rand(1, 100) <= 3;
             $sc = CallScenarios::render($scenarios[$e['call']], $n + $bot->id * 1000);
             $seconds = $failed ? 0 : ($sc['status'] === 'dropped' ? mt_rand(5, 15) : mt_rand(45, 300));
-            $cost = round($seconds * $this->rate / 60, 4);
-
-            // Keep the demo account funded the way a real owner would: top up before running dry.
-            if ($balance - $cost < 1) {
-                $balance = $this->credit($user, 25, 'jazzcash', 'JC-'.mt_rand(10000000, 99999999), $at->copy()->subHour(), $balance);
-            }
+            // Roughly what Vapi charges us (USD), shown to the super admin only.
+            $cost = round($seconds * 0.1 / 60, 4);
 
             $call = $bot->calls()->create([
                 'vapi_call_id' => 'seed_'.$bot->id.'_'.$n,
@@ -275,40 +263,29 @@ class DatabaseSeeder extends Seeder
                 ]);
                 $booking->forceFill(['created_at' => $at, 'updated_at' => $at])->save();
             }
-
-            if ($cost > 0) {
-                $balance = round($balance - $cost, 4);
-                $user->transactions()->create(['type' => 'call_charge', 'amount' => -$cost, 'balance_after' => $balance, 'description' => 'Call · '.$call->title, 'call_id' => $call->id, 'created_at' => $at->copy()->addSeconds($seconds)]);
-            }
         }
-
-        $user->forceFill(['balance' => $balance])->save();
     }
 
-    private function credit(User $user, float $usd, string $method, string $ref, Carbon $at, float $balance): float
+    private function approvedPayment(User $user, string $plan, int $months, string $method, string $ref, Carbon $at): void
     {
+        $admin = User::where('is_admin', true)->first();
         $topUp = $user->topUps()->create([
-            'amount_usd' => $usd, 'amount_pkr' => $usd * config('hamsukhan.pkr_per_usd'), 'method' => $method, 'reference' => $ref,
-            'status' => 'approved', 'reviewed_by' => User::where('is_admin', true)->value('id'), 'reviewed_at' => $at,
+            'plan' => $plan, 'months' => $months, 'amount_pkr' => config("hamsukhan.plans.{$plan}.price_pkr") * $months, 'method' => $method, 'reference' => $ref,
+            'status' => 'approved', 'reviewed_by' => $admin->id, 'reviewed_at' => $at,
         ]);
         $topUp->forceFill(['created_at' => $at->copy()->subHours(2), 'updated_at' => $at])->save();
 
-        $admin = User::where('is_admin', true)->first();
-        \App\Models\AdminAction::create(['admin_id' => $admin->id, 'target_user_id' => $user->id, 'action' => 'approve_topup', 'meta' => ['topUpId' => $topUp->id, 'amount' => $usd, 'reference' => $ref]])
+        \App\Models\AdminAction::create(['admin_id' => $admin->id, 'target_user_id' => $user->id, 'action' => 'approve_payment', 'meta' => ['topUpId' => $topUp->id, 'plan' => $plan, 'months' => $months, 'amountPkr' => (float) $topUp->amount_pkr, 'reference' => $ref]])
             ->forceFill(['created_at' => $at])->save();
-
-        $balance = round($balance + $usd, 4);
-        $user->transactions()->create(['type' => 'topup', 'amount' => $usd, 'balance_after' => $balance, 'description' => "Top-up · {$topUp->methodLabel()} · {$ref}", 'top_up_id' => $topUp->id, 'created_at' => $at]);
-
-        return $balance;
     }
 
-    private function pendingTopUp(User $user, float $usd, string $method, string $ref, int $hoursAgo): void
+    private function pendingPayment(User $user, string $plan, int $months, string $method, string $ref, int $hoursAgo): void
     {
+        $pkr = config("hamsukhan.plans.{$plan}.price_pkr") * $months;
         $path = "top-ups/{$user->id}/".strtolower($ref).'.png';
-        Storage::put($path, $this->receiptImage($method, $ref, $usd * config('hamsukhan.pkr_per_usd')));
+        Storage::put($path, $this->receiptImage($method, $ref, $pkr));
 
-        $topUp = $user->topUps()->create(['amount_usd' => $usd, 'amount_pkr' => $usd * config('hamsukhan.pkr_per_usd'), 'method' => $method, 'reference' => $ref, 'proof_path' => $path]);
+        $topUp = $user->topUps()->create(['plan' => $plan, 'months' => $months, 'amount_pkr' => $pkr, 'method' => $method, 'reference' => $ref, 'proof_path' => $path]);
         $topUp->forceFill(['created_at' => now()->subHours($hoursAgo)->subMinutes(20)])->save();
     }
 

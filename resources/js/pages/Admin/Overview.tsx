@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import Icon from '@/components/Icon';
 import AppLayout from '@/layouts/AppLayout';
-import { timeAgo, usd } from '@/lib/format';
+import { pkr, timeAgo, usd } from '@/lib/format';
 import { ActionLabel, type AdminActionRow } from './AccountShow';
 
 type Props = {
@@ -11,9 +11,9 @@ type Props = {
         suspended: number;
         callsToday: number;
         minutesThisMonth: number;
-        revenueThisMonth: number;
-        usageThisMonth: number;
-        walletTotal: number;
+        revenueThisMonthPkr: number;
+        providerCostThisMonth: number;
+        activePlans: Record<string, number>;
         pendingTopUps: number;
     };
     recentActions: AdminActionRow[];
@@ -59,23 +59,27 @@ export default function AdminOverview({ stats, recentActions }: Props) {
                 </div>
                 <div className="card stat">
                     <div className="row">
-                        <span className="lbl">Top-ups this month</span>
+                        <span className="lbl">Plan payments this month</span>
                         <span className="ico">
                             <Icon name="trend" />
                         </span>
                     </div>
-                    <div className="val num">{usd(stats.revenueThisMonth)}</div>
-                    <div className="delta">Usage charged: {usd(stats.usageThisMonth)}</div>
+                    <div className="val num">{pkr(stats.revenueThisMonthPkr)}</div>
+                    <div className="delta">Vapi cost this month: {usd(stats.providerCostThisMonth)}</div>
                 </div>
                 <div className="card stat balance">
                     <div className="row">
-                        <span className="lbl">Money held in wallets</span>
+                        <span className="lbl">Active plans</span>
                         <span className="ico">
                             <Icon name="wallet" />
                         </span>
                     </div>
-                    <div className="val num">{usd(stats.walletTotal)}</div>
-                    <div className="delta">Owed to customers as call minutes</div>
+                    <div className="val num">{Object.values(stats.activePlans).reduce((a, b) => a + b, 0)}</div>
+                    <div className="delta">
+                        {Object.entries(stats.activePlans)
+                            .map(([k, n]) => `${n} ${k.charAt(0).toUpperCase() + k.slice(1)}`)
+                            .join(' · ')}
+                    </div>
                 </div>
             </div>
 

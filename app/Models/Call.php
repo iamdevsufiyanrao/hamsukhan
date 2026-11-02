@@ -54,7 +54,6 @@ class Call extends Model
             'isTest' => $this->is_test,
             'startedAt' => $this->started_at->toIso8601String(),
             'duration' => $this->duration_seconds,
-            'cost' => (float) $this->cost,
             'quote' => $firstUser?->text,
             'direction' => $this->direction ?? 'web',
             'customerNumber' => $this->customer_number,

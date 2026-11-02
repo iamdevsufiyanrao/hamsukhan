@@ -7,16 +7,15 @@ use App\Models\AdminAction;
 use App\Models\Call;
 use App\Models\TopUp;
 use App\Models\User;
-use App\Models\WalletTransaction;
-use App\Services\WalletService;
+use App\Models\Bot;
+use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use RuntimeException;
 
-/** Super admin: every customer account, with impersonation, suspension and balance adjustments. */
+/** Super admin: every customer account, with impersonation, suspension and setting their plan by hand. */
 class AccountController extends Controller
 {
     public function overview(): Response
@@ -30,9 +29,10 @@ class AccountController extends Controller
                 'suspended' => User::whereNotNull('suspended_at')->count(),
                 'callsToday' => Call::where('started_at', '>=', now()->startOfDay())->count(),
                 'minutesThisMonth' => (int) round(Call::where('started_at', '>=', $monthStart)->sum('duration_seconds') / 60),
-                'revenueThisMonth' => (float) TopUp::where('status', 'approved')->where('reviewed_at', '>=', $monthStart)->sum('amount_usd'),
-                'usageThisMonth' => (float) -WalletTransaction::where('type', 'call_charge')->where('created_at', '>=', $monthStart)->sum('amount'),
-                'walletTotal' => (float) User::sum('balance'),
+                'revenueThisMonthPkr' => (int) TopUp::where('status', 'approved')->whereNotNull('plan')->where('reviewed_at', '>=', $monthStart)->sum('amount_pkr'),
+                // What Vapi charged for this month's calls (USD), to compare with plan revenue.
+                'providerCostThisMonth' => round((float) Call::where('started_at', '>=', $monthStart)->sum('cost'), 2),
+                'activePlans' => collect(array_keys(config('hamsukhan.plans')))->mapWithKeys(fn ($p) => [$p => User::where('plan', $p)->where('plan_expires_at', '>', now())->count()]),
                 'pendingTopUps' => TopUp::where('status', 'pending')->count(),
             ],
             'recentActions' => AdminAction::with('admin:id,name', 'target:id,name')->latest('created_at')->limit(10)->get()->map(fn (AdminAction $a) => $this->actionRow($a)),
@@ -45,7 +45,7 @@ class AccountController extends Controller
         $status = in_array($request->query('status'), ['active', 'suspended'], true) ? $request->query('status') : '';
 
         $page = User::where('is_admin', false)->whereNull('owner_id') // team members belong to their owner's account
-            ->with('bot:id,user_id,business_name,is_active')
+            ->with('bot:id,user_id,business_name,is_active')->withCount('bots')
             ->withCount(['topUps as pending_topups' => fn ($t) => $t->where('status', 'pending')])
             ->when($q, fn ($w) => $w->where(fn ($x) => $x->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%")
                 ->orWhereHas('bot', fn ($b) => $b->where('business_name', 'like', "%{$q}%"))))
@@ -54,8 +54,8 @@ class AccountController extends Controller
             ->latest()->paginate(20)->withQueryString();
 
         $since = now()->subDays(30);
-        $calls = Call::whereIn('bot_id', collect($page->items())->pluck('bot.id')->filter())->where('started_at', '>=', $since)
-            ->selectRaw('bot_id, count(*) n')->groupBy('bot_id')->pluck('n', 'bot_id');
+        $calls = Call::join('bots', 'bots.id', '=', 'calls.bot_id')->whereIn('bots.user_id', collect($page->items())->pluck('id'))
+            ->where('calls.started_at', '>=', $since)->selectRaw('bots.user_id as uid, count(*) n')->groupBy('bots.user_id')->pluck('n', 'uid');
 
         return Inertia::render('Admin/Accounts', [
             'accounts' => collect($page->items())->map(fn (User $u) => [
@@ -63,8 +63,10 @@ class AccountController extends Controller
                 'name' => $u->name,
                 'email' => $u->email,
                 'business' => $u->bot?->business_name,
-                'balance' => (float) $u->balance,
-                'calls30' => (int) ($calls[$u->bot?->id] ?? 0),
+                'plan' => $u->activePlan() ? $u->planLimits()['name'] : null,
+                'planExpiresAt' => $u->plan_expires_at?->toIso8601String(),
+                'stores' => $u->bots_count,
+                'calls30' => (int) ($calls[$u->id] ?? 0),
                 'pendingTopUps' => $u->pending_topups,
                 'suspended' => $u->isSuspended(),
                 'createdAt' => $u->created_at->toIso8601String(),
@@ -85,7 +87,9 @@ class AccountController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'timezone' => $user->timezone,
-                'balance' => (float) $user->balance,
+                'plan' => $user->activePlan(),
+                'lastPlan' => $user->plan,
+                'planExpiresAt' => $user->plan_expires_at?->toIso8601String(),
                 'suspended' => $user->isSuspended(),
                 'suspendedReason' => $user->suspended_reason,
                 'suspendedAt' => $user->suspended_at?->toIso8601String(),
@@ -102,10 +106,13 @@ class AccountController extends Controller
                 'integrations' => $bot->integrations_count,
                 'vapiAssistantId' => $bot->vapi_assistant_id,
             ] : null,
-            'transactions' => $user->transactions()->latest('created_at')->latest('id')->limit(15)->get()->map(fn (WalletTransaction $t) => [
-                'id' => $t->id, 'date' => $t->created_at->toIso8601String(), 'text' => $t->description, 'type' => $t->type, 'amount' => (float) $t->amount, 'balanceAfter' => (float) $t->balance_after,
+            'stores' => $user->bots()->withCount('calls')->get()->map(fn (Bot $b) => ['id' => $b->id, 'name' => $b->business_name ?: 'Store #'.$b->id, 'website' => $b->website, 'calls' => $b->calls_count, 'active' => $b->is_active]),
+            'usage' => app(SubscriptionService::class)->summary($user),
+            'plans' => collect(config('hamsukhan.plans'))->map(fn ($p, $k) => ['id' => $k, 'name' => $p['name']])->values(),
+            'payments' => $user->topUps()->latest()->limit(15)->get()->map(fn (TopUp $t) => [
+                'id' => $t->id, 'date' => $t->created_at->toIso8601String(), 'plan' => $t->planName(), 'months' => $t->months, 'amountPkr' => (float) $t->amount_pkr, 'status' => $t->status,
             ]),
-            'calls' => $bot ? $bot->calls()->latest('started_at')->limit(8)->get()->map->toRow() : [],
+            'calls' => Call::whereIn('bot_id', $user->bots()->select('bots.id'))->latest('started_at')->limit(8)->get()->map->toRow(),
             'actions' => AdminAction::with('admin:id,name', 'target:id,name')->where('target_user_id', $user->id)->latest('created_at')->limit(20)->get()->map(fn (AdminAction $a) => $this->actionRow($a)),
         ]);
     }
@@ -115,7 +122,7 @@ class AccountController extends Controller
         abort_if($user->is_admin, 403);
         $reason = $request->validate(['reason' => ['required', 'string', 'max:200']])['reason'];
         $user->forceFill(['suspended_at' => now(), 'suspended_reason' => $reason])->save();
-        $user->bot?->update(['is_active' => false]); // widget stops taking calls
+        Bot::where('user_id', $user->id)->update(['is_active' => false]); // every store's widget stops taking calls
         AdminAction::record($request->user(), $user, 'suspend', ['reason' => $reason]);
 
         return back()->with('success', "{$user->name} suspended, their bot is offline");
@@ -124,28 +131,30 @@ class AccountController extends Controller
     public function activate(Request $request, User $user): RedirectResponse
     {
         $user->forceFill(['suspended_at' => null, 'suspended_reason' => null])->save();
-        $user->bot?->update(['is_active' => true]);
+        Bot::where('user_id', $user->id)->update(['is_active' => true]);
         AdminAction::record($request->user(), $user, 'activate');
 
         return back()->with('success', "{$user->name} is active again");
     }
 
-    public function adjustBalance(Request $request, User $user, WalletService $wallet): RedirectResponse
+    /** Set a plan by hand (cash payment, a free month, a correction) or end it now. */
+    public function setPlan(Request $request, User $user, SubscriptionService $subscriptions): RedirectResponse
     {
-        abort_if($user->is_admin, 403);
+        abort_if($user->is_admin || $user->isMember(), 403);
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'not_in:0', 'between:-1000,1000'],
+            'plan' => ['required', 'in:none,'.implode(',', array_keys(config('hamsukhan.plans')))],
+            'months' => ['required_unless:plan,none', 'nullable', 'integer', 'between:1,12'],
             'reason' => ['required', 'string', 'max:150'],
         ]);
 
-        try {
-            $wallet->adjust($user, (float) $data['amount'], 'Adjustment · '.$data['reason']);
-        } catch (RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
+        if ($data['plan'] === 'none') {
+            $user->forceFill(['plan_expires_at' => now()])->save();
+        } else {
+            $user = $subscriptions->activate($user, $data['plan'], (int) $data['months']);
         }
-        AdminAction::record($request->user(), $user, 'adjust_balance', ['amount' => (float) $data['amount'], 'reason' => $data['reason']]);
+        AdminAction::record($request->user(), $user, 'set_plan', ['plan' => $data['plan'], 'months' => $data['months'] ?? null, 'reason' => $data['reason']]);
 
-        return back()->with('success', 'Balance adjusted');
+        return back()->with('success', $data['plan'] === 'none' ? 'Plan ended' : 'Plan active until '.$user->plan_expires_at->format('j M Y'));
     }
 
     public function impersonate(Request $request, User $user): RedirectResponse

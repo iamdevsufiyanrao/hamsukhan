@@ -5,14 +5,15 @@ namespace App\Services;
 use App\Models\Bot;
 use App\Models\User;
 
-/** Creates the default bot every new account starts with. */
+/** Creates the default bot every new account starts with, and each extra store's bot. */
 class BotProvisioner
 {
     public function __construct(private VapiService $vapi) {}
 
-    public function provision(User $user): Bot
+    public function provision(User $user, ?string $businessName = null): Bot
     {
-        $bot = $user->bot()->create([
+        $bot = $user->bots()->create([
+            'business_name' => $businessName,
             'greeting' => 'Hi, thanks for calling! How can I help you today?',
             'end_message' => 'Thanks for calling, have a great day!',
             'language' => 'English',

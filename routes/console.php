@@ -29,3 +29,11 @@ Schedule::call(function () {
     $bot = ($key = config('hamsukhan.demo.bot_key')) ? \App\Models\Bot::where('public_key', $key)->first() : null;
     $bot?->calls()->where('is_test', true)->where('created_at', '<', now()->subDays(7))->each(fn ($call) => $call->delete());
 })->daily()->name('prune-demo-calls');
+
+// Plan renewal reminder a few days before a paid plan ends (once per period, see NotificationService::planExpiring).
+Schedule::call(function () {
+    $notify = app(\App\Services\NotificationService::class);
+    \App\Models\User::where('is_admin', false)->whereNull('owner_id')->whereNull('suspended_at')->whereNotNull('plan')
+        ->whereBetween('plan_expires_at', [now(), now()->addDays((int) config('hamsukhan.notifications.renewal_reminder_days', 3))])
+        ->each(fn ($user) => rescue(fn () => $notify->planExpiring($user)));
+})->dailyAt('10:00')->timezone('Asia/Karachi')->name('plan-renewal-reminders');

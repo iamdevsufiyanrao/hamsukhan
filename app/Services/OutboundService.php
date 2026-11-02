@@ -8,10 +8,10 @@ use App\Support\Phone;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
-/** Calls the bot makes itself: callbacks the owner asks for, and appointment reminders. Charged like any other call. */
+/** Calls the bot makes itself: callbacks the owner asks for, and appointment reminders. Covered by the plan like any other call. */
 class OutboundService
 {
-    public function __construct(private VapiService $vapi, private WalletService $wallet) {}
+    public function __construct(private VapiService $vapi, private SubscriptionService $subscriptions) {}
 
     public function available(\App\Models\Bot $bot): bool
     {
@@ -70,7 +70,7 @@ class OutboundService
 
     /**
      * Every 5 minutes: each running campaign calls its next few contacts, only while the business is open
-     * (or 10:00–20:00 Pakistan time when no hours are set). A campaign pauses itself when the balance runs out.
+     * (or 10:00–20:00 Pakistan time when no hours are set). A campaign pauses itself when the plan runs out or hits its limit.
      */
     public function runCampaigns(): int
     {
@@ -100,8 +100,9 @@ class OutboundService
                     $contact->update(['vapi_call_id' => $id]);
                     $placed++;
                 } catch (RuntimeException $e) {
-                    $contact->update(['status' => str_contains($e->getMessage(), 'balance') ? 'pending' : 'failed', 'error' => mb_strimwidth($e->getMessage(), 0, 300, '…'), 'called_at' => null]);
-                    if (str_contains($e->getMessage(), 'balance')) {
+                    $blocked = $e->getCode() === self::BLOCKED;
+                    $contact->update(['status' => $blocked ? 'pending' : 'failed', 'error' => mb_strimwidth($e->getMessage(), 0, 300, '…'), 'called_at' => null]);
+                    if ($blocked) {
                         $c->update(['status' => 'paused']);
                         break;
                     }
@@ -112,11 +113,14 @@ class OutboundService
         return $placed;
     }
 
+    /** Exception code for "the plan doesn't allow a call now" (a campaign pauses instead of failing the contact). */
+    public const BLOCKED = 402;
+
     private function affordable(\App\Models\Bot $bot): int
     {
-        $seconds = $this->wallet->maxAffordableSeconds($bot->user, $bot->max_call_minutes);
+        $seconds = $this->subscriptions->maxCallSeconds($bot);
         if ($seconds < 60) {
-            throw new RuntimeException('Not enough balance (or monthly limit reached) for a call. Top up first.');
+            throw new RuntimeException(SubscriptionService::blockMessage($this->subscriptions->blockReason($bot) ?? 'fair_use'), self::BLOCKED);
         }
 
         return $seconds;

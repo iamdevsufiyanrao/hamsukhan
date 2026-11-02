@@ -2,13 +2,14 @@ import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { FieldError, Modal, Seg } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
-import { fmtDate, fmtTime, pkr, usd } from '@/lib/format';
+import { fmtDate, fmtTime, pkr } from '@/lib/format';
 
 type Status = 'pending' | 'approved' | 'rejected';
 type TopUp = {
     id: number;
     user: { name: string; email: string };
-    amountUsd: number;
+    plan: string;
+    months: number;
     amountPkr: number;
     method: string;
     reference: string;
@@ -20,7 +21,9 @@ type TopUp = {
 };
 type Props = { filter: Status; topUps: TopUp[]; counts: Partial<Record<Status, number>> };
 
-/** Admin: check the payment in the JazzCash/Easypaisa/bank app, then approve to credit the wallet. */
+const planText = (t: { plan: string; months: number; amountPkr: number }) => `${t.plan} · ${t.months} month${t.months > 1 ? 's' : ''} · ${pkr(t.amountPkr)}`;
+
+/** Admin: check the payment in the JazzCash/Easypaisa/bank app, then approve to switch on (or extend) the customer's plan. */
 export default function TopUps({ filter, topUps, counts }: Props) {
     const [rejecting, setRejecting] = useState<TopUp | null>(null);
     const [note, setNote] = useState('');
@@ -28,7 +31,7 @@ export default function TopUps({ filter, topUps, counts }: Props) {
     const [busy, setBusy] = useState<number | null>(null);
 
     const approve = (t: TopUp) => {
-        if (!confirm(`Approve ${usd(t.amountUsd)} (${pkr(t.amountPkr)}) for ${t.user.name}?\nOnly approve after you see the payment in your ${t.method} account.`)) return;
+        if (!confirm(`Approve ${planText(t)} for ${t.user.name}?\nOnly approve after you see the payment in your ${t.method} account.`)) return;
         router.post(`/admin/top-ups/${t.id}/approve`, {}, { preserveScroll: true, onStart: () => setBusy(t.id), onFinish: () => setBusy(null) });
     };
     const reject = () => {
@@ -110,8 +113,10 @@ export default function TopUps({ filter, topUps, counts }: Props) {
                                         )}
                                     </td>
                                     <td className="r num">
-                                        <b>{usd(t.amountUsd)}</b>
-                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{pkr(t.amountPkr)}</div>
+                                        <b>{pkr(t.amountPkr)}</b>
+                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                            {t.plan} · {t.months} month{t.months > 1 ? 's' : ''}
+                                        </div>
                                     </td>
                                     <td className="r">
                                         {t.status === 'pending' ? (
@@ -141,7 +146,7 @@ export default function TopUps({ filter, topUps, counts }: Props) {
                 open={!!rejecting}
                 onClose={() => setRejecting(null)}
                 title="Reject this payment?"
-                desc={rejecting ? `${rejecting.user.name} · ${usd(rejecting.amountUsd)} · ${rejecting.method} ${rejecting.reference}. The customer sees your reason.` : ''}
+                desc={rejecting ? `${rejecting.user.name} · ${planText(rejecting)} · ${rejecting.method} ${rejecting.reference}. The customer sees your reason.` : ''}
                 footer={
                     <>
                         <button className="btn btn-ghost" onClick={() => setRejecting(null)}>

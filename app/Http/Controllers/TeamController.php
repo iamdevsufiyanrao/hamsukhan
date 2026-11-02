@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/** The account owner adds staff to their account. A member gets an email link to set their own password. */
+/**
+ * The account owner adds staff to their account. A member gets an email link to set their own password.
+ * The plan sets how many people can log in, the owner included (Basic 1, Business 5).
+ */
 class TeamController extends Controller
 {
-    public const MAX_MEMBERS = 10;
 
     public function store(Request $request): RedirectResponse
     {
@@ -23,8 +25,11 @@ class TeamController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'role' => ['required', Rule::in(User::TEAM_ROLES)],
         ], ['email.unique' => 'That email already has a Hamsukhan login. Use another email for this team member.']);
-        if ($owner->members()->count() >= self::MAX_MEMBERS) {
-            return back()->withErrors(['email' => 'You can add up to '.self::MAX_MEMBERS.' team members.']);
+        $users = $owner->planLimits()['users'];
+        if ($owner->members()->count() + 1 >= $users) {
+            return back()->withErrors(['email' => $users === 1
+                ? 'Your plan includes 1 user. Upgrade to Business to add up to 4 team members.'
+                : "Your plan includes {$users} users (you and ".($users - 1).' team members).']);
         }
 
         $member = new User(['name' => $data['name'], 'email' => $data['email'], 'password' => Str::random(40), 'timezone' => $owner->timezone]);

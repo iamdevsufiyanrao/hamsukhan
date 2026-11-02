@@ -1,0 +1,38 @@
+{%- comment -%}
+  Hamsukhan voice assistant: loads the same widget.js as the plain website snippet.
+  widget.js reads data-bot from its own <script> tag (document.currentScript), so it must stay a classic script tag.
+{%- endcomment -%}
+{%- assign hamsukhan_key = block.settings.bot_key | strip -%}
+{%- assign hamsukhan_host = block.settings.host | strip | default: 'https://hamsukhan.techvocalz.com' -%}
+{%- assign hamsukhan_last = hamsukhan_host | slice: -1 -%}
+{%- if hamsukhan_last == '/' -%}
+  {%- assign hamsukhan_len = hamsukhan_host.size | minus: 1 -%}
+  {%- assign hamsukhan_host = hamsukhan_host | slice: 0, hamsukhan_len -%}
+{%- endif -%}
+{%- if hamsukhan_key != blank -%}
+  <script src="{{ hamsukhan_host }}/widget.js" data-bot="{{ hamsukhan_key | escape }}" defer></script>
+{%- elsif request.design_mode -%}
+  <script>console.warn('[Hamsukhan] Add your bot key in App embeds → Hamsukhan voice assistant.');</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Hamsukhan voice assistant",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "bot_key",
+      "label": "Bot key",
+      "info": "Hamsukhan dashboard → Bot Studio → Embed. Copy the key shown under Shopify."
+    },
+    {
+      "type": "text",
+      "id": "host",
+      "label": "Hamsukhan address",
+      "default": "https://hamsukhan.techvocalz.com",
+      "info": "Leave as is unless support asks you to change it."
+    }
+  ]
+}
+{% endschema %}

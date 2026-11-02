@@ -23,10 +23,10 @@ class TeamLiveCampaignTest extends TestCase
         parent::tearDown();
     }
 
-    private function live(float $balance = 10): User
+    private function live(?string $plan = 'basic'): User
     {
         config(['hamsukhan.vapi.private_key' => 'vk', 'hamsukhan.vapi.public_key' => 'pk', 'hamsukhan.vapi.phone_number_id' => 'pn_platform']);
-        $user = $this->customer($balance);
+        $user = $this->customer($plan);
         $user->bot->forceFill(['vapi_assistant_id' => 'asst_1', 'sync_error' => null])->save();
 
         return $user->fresh();
@@ -72,7 +72,7 @@ class TeamLiveCampaignTest extends TestCase
     public function test_team_members_share_the_bot_with_role_limits(): void
     {
         Mail::fake();
-        $owner = $this->customer(10);
+        $owner = $this->customer('business');
         $this->actingAs($owner)->post('/settings/team', ['name' => 'Hina', 'email' => 'hina@salon.pk', 'role' => 'operator'])->assertSessionHas('success');
         $member = User::where('email', 'hina@salon.pk')->firstOrFail();
         $this->assertSame([$owner->id, 'operator'], [$member->owner_id, $member->team_role]);

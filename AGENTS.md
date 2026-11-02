@@ -1,7 +1,7 @@
 # Hamsukhan — project guide
 
 AI receptionist SaaS: a business gets a voice bot that answers website calls in the owner's **cloned voice**,
-follows their prompt, records every call (transcript + cost), captures bookings/orders, and bills a prepaid wallet.
+follows their prompt, records every call (transcript), captures bookings/orders, and is paid as a monthly plan (Basic: 1 store / 1 user, Business: 5 stores / 5 users, unlimited calls with a fair-use limit).
 
 Business rules live in [docs/BUSINESS_LOGIC.md](docs/BUSINESS_LOGIC.md) — read it before changing billing, calls, bookings, connectors or admin.
 Planned next: [docs/LIVE_CALL_ACTIONS.md](docs/LIVE_CALL_ACTIONS.md) (needs Vapi keys).
@@ -11,14 +11,14 @@ Planned next: [docs/LIVE_CALL_ACTIONS.md](docs/LIVE_CALL_ACTIONS.md) (needs Vapi
 - SQLite locally, MySQL on the host (migrations are portable)
 - Providers: **Vapi** (call engine), **ElevenLabs** (voice cloning), **OpenAI** (LLM inside Vapi)
 - No real phone numbers — calls come only from the website widget (`public/widget.js`)
-- Payments: **manual top-ups** (JazzCash / Easypaisa / bank → admin approves). No Stripe (company not registered).
+- Payments: **manual plan payments** (JazzCash / Easypaisa / bank → admin approves → plan active until a date). No Stripe (company not registered).
 
 ## Run it (Windows, this machine)
 ```bat
 serve.bat                      :: http://127.0.0.1:8123  (runs php -S from public\ with OPcache)
 npm run build                  :: after any change in resources/js or resources/css
 php artisan migrate:fresh --seed   :: reset demo data
-php artisan test               :: 65 feature tests, must stay green
+php artisan test               :: 125 feature tests, must stay green
 php artisan schedule:work      :: runs connector retries every minute (cron schedule:run on the host)
 npx tsc --noEmit -p .          :: type-check the frontend
 ```
@@ -31,12 +31,14 @@ npx tsc --noEmit -p .          :: type-check the frontend
 - `a@smartgeeks.io` — Smart Geeks repair shop, ~60 days of calls
 - `sana@bloomsalon.pk` — Bloom Salon, new account
 - `ali@karachigrill.pk` — Karachi Grill restaurant: orders with items/address, 2 connectors
-- `admin@hamsukhan.test` — super admin at `/admin`: accounts, login-as, suspend, balance, payments
+- `admin@hamsukhan.test` — super admin at `/admin`: accounts, login-as, suspend, set plan, payments
 
 ## Where things are
 | Concern | Code |
 |---|---|
-| Money (only place balance changes) | `app/Services/WalletService.php` |
+| Plans (only place a plan or its end date changes; call gating, fair use) | `app/Services/SubscriptionService.php` |
+| Stores (several bots per account, `users.current_bot_id`, `User::bot()` = the open store) | `StoreController`, `User::bot()/bots()` |
+| Shopify theme app embed | `packages/hamsukhan-shopify` |
 | Vapi assistant sync | `app/Services/VapiService.php` |
 | Voice cloning | `app/Services/ElevenLabsService.php` |
 | Call report → call + transcript + booking + charge | `app/Services/CallIngestService.php` |
@@ -50,7 +52,7 @@ npx tsc --noEmit -p .          :: type-check the frontend
 | Settings & prices | Defaults in `config/hamsukhan.php` + `.env`; the super admin's values (Settings page, `settings` table, secrets encrypted) override them at boot via `PlatformSettings::apply()` |
 | Modules / roles overview (for people) | `docs/MODULES_AND_ROLES.md` |
 | Pages | `resources/js/pages/*` (one per route), layout `resources/js/layouts/AppLayout.tsx` |
-| Shared page props (user, wallet, badges, flash) | `app/Http/Middleware/HandleInertiaRequests.php` |
+| Shared page props (user, plan, stores, badges, flash) | `app/Http/Middleware/HandleInertiaRequests.php` |
 
 ## Conventions
 - Controllers stay thin; anything touching money or provider APIs goes through a Service.

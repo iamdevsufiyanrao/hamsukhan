@@ -53,10 +53,6 @@ export default function CallDrawer({ callId, onClose }: { callId: number | null;
                             <strong className="num">{fmtDur(call.duration)}</strong>
                         </div>
                         <div>
-                            <small>Cost</small>
-                            <strong className="num">${call.cost.toFixed(4)}</strong>
-                        </div>
-                        <div>
                             <small>Status</small>
                             <strong>
                                 <StatusChip status={call.status} />

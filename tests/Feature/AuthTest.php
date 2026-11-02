@@ -23,12 +23,10 @@ class AuthTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Landing')
                 ->missing('config.accounts')
-                ->missing('config.pkrPerUsd')
-                ->has('config.ratePerMinute'));
-
-        $this->actingAs(User::factory()->create())->get('/')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Landing')->has('config.accounts', 3));
+                ->has('config.plans', 2)
+                ->where('config.plans.0.pricePkr', 3000)
+                ->where('config.plans.1.stores', 5)
+                ->missing('config.plans.0.fair_use_minutes'));
     }
 
     public function test_register_creates_account_with_default_bot(): void
@@ -45,7 +43,7 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->bot);
         $this->assertNotNull($user->bot->vapi_assistant_id); // simulated sync ran
-        $this->assertSame('0.0000', $user->balance);
+        $this->assertNull($user->activePlan()); // no free plan unless the admin sets trial days
         $this->assertSame('Asia/Karachi', $user->timezone);
     }
 
@@ -78,7 +76,7 @@ class AuthTest extends TestCase
 
     public function test_every_app_page_renders(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         foreach (['/dashboard', '/bot-studio', '/bot-studio?tab=widget', '/calls', '/bookings', '/billing', '/settings'] as $url) {
             $this->actingAs($user)->get($url)->assertOk();
         }

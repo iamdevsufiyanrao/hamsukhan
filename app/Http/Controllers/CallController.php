@@ -40,7 +40,6 @@ class CallController extends Controller
             'summary' => [
                 'total' => (clone $all)->count(),
                 'talkMinutes' => (int) round((clone $all)->sum('duration_seconds') / 60),
-                'spend' => (float) (clone $all)->sum('cost'),
                 'completedPct' => ($n = (clone $all)->count()) ? (int) round((clone $all)->where('status', 'completed')->count() / $n * 100) : 0,
             ],
         ]);
@@ -60,12 +59,12 @@ class CallController extends Controller
 
         return response()->streamDownload(function () use ($query, $tz) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Started', 'Title', 'Outcome', 'Status', 'Duration (s)', 'Cost (USD)', 'Summary', 'Transcript']);
+            fputcsv($out, ['Started', 'Title', 'Outcome', 'Status', 'Duration (s)', 'Summary', 'Transcript']);
             $query->chunk(200, function ($calls) use ($out, $tz) {
                 foreach ($calls as $c) {
                     fputcsv($out, [
                         $c->started_at->setTimezone($tz)->format('Y-m-d H:i'), $c->title, $c->outcome_tag, $c->status,
-                        $c->duration_seconds, number_format((float) $c->cost, 4, '.', ''), $c->summary,
+                        $c->duration_seconds, $c->summary,
                         $c->messages->map(fn ($m) => ($m->role === 'ai' ? 'Bot: ' : 'Caller: ').$m->text)->implode("\n"),
                     ]);
                 }

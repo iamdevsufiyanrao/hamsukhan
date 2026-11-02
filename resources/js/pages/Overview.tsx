@@ -71,7 +71,6 @@ export default function Overview({ stats, series, intents, recentCalls, bot, set
 
     const done = SETUP.filter((s) => setup[s.key]).length;
     const intentTotal = intents.reduce((a, i) => a + i.count, 0);
-    const [whole, cents] = (auth?.wallet.balance ?? 0).toFixed(2).split('.');
     const avg = fmtDur(stats.avgSeconds).split(' ');
 
     return (
@@ -143,22 +142,21 @@ export default function Overview({ stats, series, intents, recentCalls, bot, set
                 </Stat>
                 <div className="card stat balance">
                     <div className="row">
-                        <span className="lbl">Current balance</span>
+                        <span className="lbl">Your plan</span>
                         <span className="ico">
                             <Icon name="wallet" />
                         </span>
                     </div>
-                    <div className="val num">
-                        ${whole}
-                        <small>.{cents}</small>
-                    </div>
+                    <div className="val">{auth?.plan.active ? auth.plan.name : 'Not active'}</div>
                     <div className="row" style={{ marginTop: 'auto' }}>
                         <span className="delta" style={{ margin: 0 }}>
-                            ≈ {auth?.wallet.minutesLeft} min left
+                            {auth?.plan.active ? `Unlimited calls · ${auth.plan.daysLeft} days left` : 'Assistant is off'}
                         </span>
-                        <button className="btn" onClick={() => openModal('topup')}>
-                            Top up
-                        </button>
+                        {!auth?.user.teamRole && (
+                            <Link href="/billing" className="btn">
+                                {auth?.plan.active ? 'Renew' : 'Choose plan'}
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>
@@ -246,13 +244,12 @@ export default function Overview({ stats, series, intents, recentCalls, bot, set
                                     <th>Time</th>
                                     <th>Conversation</th>
                                     <th>Outcome</th>
-                                    <th className="r">Cost</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {recentCalls.length === 0 && (
                                     <tr style={{ cursor: 'default' }}>
-                                        <td colSpan={4}>
+                                        <td colSpan={3}>
                                             <div className="empty">No calls yet, try a test call.</div>
                                         </td>
                                     </tr>

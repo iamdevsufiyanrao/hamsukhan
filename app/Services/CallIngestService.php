@@ -14,12 +14,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Turns Vapi's "end-of-call-report" into a Call + transcript + optional Booking, then charges the wallet.
- * Idempotent: the same Vapi call id is only ever stored and charged once.
+ * Turns Vapi's "end-of-call-report" into a Call + transcript + optional Booking.
+ * Idempotent: the same Vapi call id is only ever stored once.
  */
 class CallIngestService
 {
-    public function __construct(private WalletService $wallet, private IntegrationDispatcher $integrations, private NotificationService $notifications) {}
+    public function __construct(private SubscriptionService $subscriptions, private IntegrationDispatcher $integrations, private NotificationService $notifications) {}
 
     public function ingestEndOfCallReport(array $message): ?Call
     {
@@ -51,8 +51,8 @@ class CallIngestService
                 'started_at' => $started,
                 'ended_at' => $ended,
                 'duration_seconds' => $duration,
-                // The landing-page demo and failed connections are never billed.
-                'cost' => Arr::get($message, 'call.metadata.isDemo') || $status === 'failed' ? 0 : $this->wallet->costFor($duration),
+                // What Vapi charged us (USD), for the super admin's view of usage; customers pay a flat monthly plan.
+                'cost' => round((float) Arr::get($message, 'cost', 0), 4),
                 'recording_url' => Arr::get($message, 'recordingUrl') ?? Arr::get($message, 'artifact.recordingUrl'),
                 'summary' => Arr::get($message, 'analysis.summary') ?? Arr::get($message, 'summary'),
                 'unanswered' => collect((array) Arr::get($structured, 'unansweredQuestions', []))->filter(fn ($q) => is_string($q) && trim($q) !== '')
@@ -90,14 +90,12 @@ class CallIngestService
             return $call;
         });
 
-        $this->wallet->chargeCall($call->setRelation('bot', $bot));
-
         // A campaign call finished: mark that contact (scoped to this bot's campaigns).
         if ($contactId = Arr::get($message, 'call.metadata.campaignContactId')) {
             \App\Models\CampaignContact::whereKey($contactId)->whereHas('campaign', fn ($q) => $q->where('bot_id', $bot->id))
                 ->update(['status' => $status === 'failed' ? 'failed' : 'done', 'error' => $status === 'failed' ? mb_substr((string) Arr::get($message, 'endedReason'), 0, 300) : null]);
         }
-        $this->wallet->checkAlerts($bot->user()->first());
+        $this->subscriptions->checkAlerts($bot->user()->first());
 
         // Push the booking/order into the customer's own software (their connectors) and alert the owner.
         // Live bookings were already sent to connectors and alerted when they were made.

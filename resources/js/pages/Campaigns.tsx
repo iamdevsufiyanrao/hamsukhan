@@ -6,12 +6,12 @@ import { fmtDateLong } from '@/lib/format';
 
 type Counts = { pending: number; calling: number; done: number; failed: number; skipped: number };
 type Campaign = { id: number; name: string; purpose: string; firstMessage: string; status: 'draft' | 'running' | 'paused' | 'done'; perRun: number; createdAt: string; counts: Counts; failures: { name: string | null; phone: string; error: string | null }[] };
-type Props = { available: boolean; rate: number; campaigns: Campaign[] };
+type Props = { available: boolean; campaigns: Campaign[] };
 
 const STATUS_CHIP: Record<Campaign['status'], string> = { draft: '', running: 'ok', paused: 'warn', done: '' };
 
 /** The bot calls a list of customers: appointment reminders, follow-ups, offers. */
-export default function Campaigns({ available, rate, campaigns }: Props) {
+export default function Campaigns({ available, campaigns }: Props) {
     const form = useForm({
         name: '',
         purpose: '',
@@ -36,7 +36,7 @@ export default function Campaigns({ available, rate, campaigns }: Props) {
                     <div className="card-h">
                         <div>
                             <h3>Your campaigns</h3>
-                            <p>Calls go out only during your opening hours (10 AM to 8 PM if none are set), a few at a time. Each call is billed per minute (about Rs {rate}).</p>
+                            <p>Calls go out only during your opening hours (10 AM to 8 PM if none are set), a few at a time. Calls are included in your monthly plan.</p>
                         </div>
                     </div>
                     <div className="card-b" style={{ display: 'grid', gap: 12 }}>

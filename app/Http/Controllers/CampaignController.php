@@ -21,7 +21,6 @@ class CampaignController extends Controller
 
         return Inertia::render('Campaigns', [
             'available' => $outbound->available($bot),
-            'rate' => (int) round(config('hamsukhan.rate_per_minute') * config('hamsukhan.pkr_per_usd')),
             'campaigns' => $bot->campaigns()->latest()->get()->map(fn (Campaign $c) => [
                 'id' => $c->id,
                 'name' => $c->name,

@@ -2,8 +2,8 @@ import { router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import { FieldError, Modal, useUI } from './ui';
-import { api, pkr, usd } from '@/lib/format';
-import type { SharedProps } from '@/types';
+import { api, pkr } from '@/lib/format';
+import type { PaymentAccount, Plan, SharedProps } from '@/types';
 import { PHASE_LABEL, useVapiCall } from '@/lib/vapiCall';
 
 type StartResponse = {
@@ -22,7 +22,7 @@ type StartResponse = {
  */
 export function TestCallModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { auth } = usePage<SharedProps>().props;
-    const { toast, openModal } = useUI();
+    const { toast } = useUI();
     const [simState, setSimState] = useState<'idle' | 'connecting' | 'live' | 'saving' | 'ended'>('idle');
     const [secs, setSecs] = useState(0);
     const [note, setNote] = useState('');
@@ -83,9 +83,8 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
         } catch (e: any) {
             setSimState('idle');
             if (e.status === 402) {
-                toast('Not enough balance for a call, top up first.', 'error');
+                toast(e.message || 'Your monthly plan is not active. Renew it from the Billing page.', 'error');
                 onClose();
-                openModal('topup');
             } else {
                 toast(e.message || 'Could not start the call', 'error');
             }
@@ -96,9 +95,9 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
         window.clearInterval(timer.current);
         setSimState('saving');
         try {
-            const r = await api<{ cost: number }>('/test-call/finish', { method: 'POST', body: { seconds: secsRef.current } });
+            await api('/test-call/finish', { method: 'POST', body: { seconds: secsRef.current } });
             setSimState('ended');
-            setNote(`Saved to Call Logs · charged ${usd(r.cost, 4)}`);
+            setNote('Saved to Call Logs');
             router.reload();
         } catch (e: any) {
             setSimState('ended');
@@ -121,7 +120,7 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
     };
 
     const simHint = {
-        idle: 'Tap to start a test call · uses your balance',
+        idle: 'Tap to start a test call · included in your plan',
         connecting: 'Connecting…',
         live: 'Connected, say hello · tap to hang up',
         saving: 'Saving the call…',
@@ -171,11 +170,15 @@ export function TestCallModal({ open, onClose }: { open: boolean; onClose: () =>
     );
 }
 
-/** Manual top-up: pay to our JazzCash/Easypaisa/bank account, then submit the reference + screenshot. */
-export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const { config } = usePage<SharedProps>().props;
-    const form = useForm<{ amount: number; method: string; reference: string; proof: File | null }>({ amount: 25, method: 'jazzcash', reference: '', proof: null });
-    const account = config.accounts.find((a) => a.id === form.data.method) ?? config.accounts[0];
+/** Manual plan payment: pick a plan and how many months, pay to our JazzCash/Easypaisa/bank account, then submit the reference + screenshot. */
+export function PaymentModal({ open, onClose, plans, accounts, initialPlan }: { open: boolean; onClose: () => void; plans: Plan[]; accounts: PaymentAccount[]; initialPlan: Plan['id'] }) {
+    const form = useForm<{ plan: Plan['id']; months: number; method: string; reference: string; proof: File | null }>({ plan: initialPlan, months: 1, method: 'jazzcash', reference: '', proof: null });
+    useEffect(() => {
+        if (open) form.setData('plan', initialPlan);
+    }, [open, initialPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+    const plan = plans.find((p) => p.id === form.data.plan) ?? plans[0];
+    const total = plan.pricePkr * form.data.months;
+    const account = accounts.find((a) => a.id === form.data.method) ?? accounts[0];
 
     const close = () => {
         form.reset();
@@ -183,7 +186,7 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
         onClose();
     };
     const submit = () =>
-        form.post('/billing/top-ups', {
+        form.post('/billing/payments', {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => close(),
@@ -193,38 +196,42 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
         <Modal
             open={open}
             onClose={close}
-            title="Add funds"
-            desc="Send the payment, then submit the transaction ID. Your balance updates once we verify it."
+            title="Pay for your plan"
+            desc="Send the payment, then submit the transaction ID. Your plan switches on once we verify it."
             footer={
                 <>
                     <button className="btn btn-ghost" onClick={close}>
                         Cancel
                     </button>
-                    <button className="btn btn-primary" disabled={form.processing || form.data.amount < config.minTopUp || !form.data.reference || !form.data.proof} onClick={submit}>
+                    <button className="btn btn-primary" disabled={form.processing || !form.data.reference || !form.data.proof} onClick={submit}>
                         {form.processing ? 'Submitting…' : 'Submit payment'}
                     </button>
                 </>
             }
         >
-            <div className="amounts">
-                {[10, 25, 50, 100].map((a) => (
-                    <button key={a} type="button" className={a === form.data.amount ? 'on' : ''} onClick={() => form.setData('amount', a)}>
-                        ${a}
+            <div className="section-t">Plan</div>
+            <div className="acct">
+                {plans.map((p) => (
+                    <button key={p.id} type="button" className={p.id === form.data.plan ? 'on' : ''} onClick={() => form.setData('plan', p.id)}>
+                        <b>{p.name}</b>
+                        {pkr(p.pricePkr)}/month · {p.stores} store{p.stores > 1 ? 's' : ''}
                     </button>
                 ))}
             </div>
-            <div className="field" style={{ marginBottom: 14 }}>
-                <label htmlFor="amt">Amount (USD)</label>
-                <input id="amt" className={'input num' + (form.errors.amount ? ' bad' : '')} type="number" min={config.minTopUp} value={form.data.amount || ''} onChange={(e) => form.setData('amount', +e.target.value)} />
-                <span className="hint">
-                    You pay <b>{pkr((form.data.amount || 0) * config.pkrPerUsd)}</b> · ≈ {Math.floor((form.data.amount || 0) / config.ratePerMinute)} minutes of calls · minimum {usd(config.minTopUp)}
-                </span>
-                <FieldError msg={form.errors.amount} />
+            <FieldError msg={form.errors.plan} />
+            <div className="section-t">Months</div>
+            <div className="amounts">
+                {[1, 3, 6, 12].map((m) => (
+                    <button key={m} type="button" className={m === form.data.months ? 'on' : ''} onClick={() => form.setData('months', m)}>
+                        {m}
+                    </button>
+                ))}
             </div>
+            <FieldError msg={form.errors.months} />
 
             <div className="section-t">Pay with</div>
             <div className="acct">
-                {config.accounts.map((a) => (
+                {accounts.map((a) => (
                     <button key={a.id} type="button" className={a.id === form.data.method ? 'on' : ''} onClick={() => form.setData('method', a.id)}>
                         <b>{a.label}</b>
                         {a.id === 'bank' ? 'IBAN' : 'Mobile account'}
@@ -232,7 +239,7 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
                 ))}
             </div>
             <div className="pay-box">
-                Send <b>{pkr((form.data.amount || 0) * config.pkrPerUsd)}</b> to <b>{account.title}</b>
+                Send <b>{pkr(total)}</b> ({plan.name} × {form.data.months} month{form.data.months > 1 ? 's' : ''}) to <b>{account.title}</b>
                 <div className="mono">{account.number}</div>
             </div>
 

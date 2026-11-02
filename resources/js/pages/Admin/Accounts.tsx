@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/Icon';
 import { Seg } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
-import { fmtDateLong, usd } from '@/lib/format';
+import { fmtDateLong } from '@/lib/format';
 
 type Props = {
-    accounts: { id: number; name: string; email: string; business: string | null; balance: number; calls30: number; pendingTopUps: number; suspended: boolean; createdAt: string }[];
+    accounts: { id: number; name: string; email: string; business: string | null; plan: string | null; planExpiresAt: string | null; stores: number; calls30: number; pendingTopUps: number; suspended: boolean; createdAt: string }[];
     pagination: { page: number; lastPage: number; total: number };
     filters: { q: string; status: '' | 'active' | 'suspended' };
 };
@@ -55,16 +55,17 @@ export default function Accounts({ accounts, pagination, filters }: Props) {
                             <tr>
                                 <th>Account</th>
                                 <th>Business</th>
+                                <th>Stores</th>
                                 <th>Calls (30 days)</th>
                                 <th>Status</th>
                                 <th>Joined</th>
-                                <th className="r">Balance</th>
+                                <th className="r">Plan</th>
                             </tr>
                         </thead>
                         <tbody>
                             {accounts.length === 0 && (
                                 <tr style={{ cursor: 'default' }}>
-                                    <td colSpan={6}>
+                                    <td colSpan={7}>
                                         <div className="empty">No accounts match.</div>
                                     </td>
                                 </tr>
@@ -76,6 +77,7 @@ export default function Accounts({ accounts, pagination, filters }: Props) {
                                         <span>{a.email}</span>
                                     </td>
                                     <td>{a.business ?? <span style={{ color: 'var(--muted)' }}>-</span>}</td>
+                                    <td className="num">{a.stores}</td>
                                     <td className="num">{a.calls30}</td>
                                     <td>
                                         <span className={'chip ' + (a.suspended ? 'bad' : 'ok')}>{a.suspended ? 'Suspended' : 'Active'}</span>
@@ -86,8 +88,15 @@ export default function Accounts({ accounts, pagination, filters }: Props) {
                                         )}
                                     </td>
                                     <td style={{ color: 'var(--muted)', fontWeight: 600 }}>{fmtDateLong(a.createdAt)}</td>
-                                    <td className="r num">
-                                        <b>{usd(a.balance)}</b>
+                                    <td className="r">
+                                        {a.plan ? (
+                                            <>
+                                                <b>{a.plan}</b>
+                                                {a.planExpiresAt && <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)' }}>until {fmtDateLong(a.planExpiresAt)}</span>}
+                                            </>
+                                        ) : (
+                                            <span className="chip bad">{a.planExpiresAt ? 'Expired' : 'No plan'}</span>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

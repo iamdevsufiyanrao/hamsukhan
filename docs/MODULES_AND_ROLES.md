@@ -26,20 +26,20 @@ enter those keys under Settings → API keys.
 | # | Module | What it does |
 |---|---|---|
 | 1 | **Accounts & Auth** | Sign up (terms required), log in, remember me, forgot/reset password, log out, profile, avatar, email change, password change, delete account |
-| 2 | **Dashboard (Overview)** | Calls today / this month / average length, balance, 7/14/30-day call chart, busiest hour, completion rate, bookings this month, "why people call", recent calls, setup checklist |
+| 2 | **Dashboard (Overview)** | Calls today / this month / average length, plan, 7/14/30-day call chart, busiest hour, completion rate, bookings this month, "why people call", recent calls, setup checklist |
 | 3 | **Bot Studio** | Greeting, language, instructions (prompt) with templates, max call length, end-of-call message, **what the bot must collect** (custom fields) |
 | 4 | **Voices** | Record your voice in the browser (≥30 s, consent required) → cloned with ElevenLabs; up to 5 voices; preset voices; preview; delete |
 | 5 | **Knowledge** | Upload menu / price list / FAQ files (PDF, DOCX, TXT, CSV, MD) + "quick facts" the bot must know |
 | 6 | **Website widget** | Call button for the business's website: position, size, colours, text for idle / connecting / on call / error; live preview; one-line embed code; "installed" detection |
-| 7 | **Calls engine** | Starts web calls through Vapi (balance check + max length), receives the end-of-call report, stores transcript, summary, recording, outcome, cost |
+| 7 | **Calls engine** | Starts web calls through Vapi (active plan + fair-use check + max length), receives the end-of-call report, stores transcript, summary, recording, outcome, cost |
 | 8 | **Call Logs** | Search transcripts, filter by date and status, pagination, call details (transcript, summary, recording player), CSV export |
 | 9 | **Bookings & Orders** | Everything the bot captured: customer, phone, request, custom fields (items, address, date…), type (booking / order / callback), status new → confirmed → done, link to the call, "sent to your software" status |
 | 10 | **Integrations (Plugin)** | Connectors that push every booking/order into the business's own software. See section 4 |
-| 11 | **Wallet & Billing** | Prepaid balance in USD (PKR shown), per-second billing, ledger of every change, low-balance warning, **manual top-ups** via JazzCash / Easypaisa / bank with screenshot |
-| 12 | **Super admin — Accounts** | List/search all customers, account page, **Login as** (impersonation), suspend / re-activate, adjust balance |
+| 11 | **Plans & Billing** | Monthly plans (Basic Rs 3,000: 1 store/1 user · Business Rs 25,000: 5 stores/5 users), unlimited calls with a fair-use limit, **manual plan payments** via JazzCash / Easypaisa / bank with screenshot, renewal reminder; several **stores** per account with a switcher |
+| 12 | **Super admin — Accounts** | List/search all customers, account page, **Login as** (impersonation), suspend / re-activate, set plan |
 | 13 | **Super admin — Payments** | Approve / reject manual top-ups (view screenshot, reason required for reject) |
 | 14 | **Super admin — Settings** | Site settings, SEO, billing & payment accounts, **API keys (Vapi, ElevenLabs, OpenAI)**, plugin rules + all connectors, cron & system health |
-| 15 | **Audit log** | Every super-admin action (login-as, suspend, balance change, payment review, settings change, connector pause) with who, when, what |
+| 15 | **Audit log** | Every super-admin action (login-as, suspend, plan change, payment review, settings change, connector pause) with who, when, what |
 | 16 | **Test your bot** | Customer talks to their own bot from the dashboard (real call with Vapi; simulated sample call until keys are set) |
 
 ---
@@ -50,7 +50,7 @@ enter those keys under Settings → API keys.
 - Sees the call button on the business website (`widget.js`).
 - Clicks it → talks to the bot in the owner's cloned voice.
 - Can ask questions (hours, prices, address — from the knowledge files), book an appointment, place an order, ask for a callback.
-- Cannot call if the business has no balance or is suspended (the button shows an error state).
+- Cannot call if the business's plan is not active, the fair-use limit is used up, or it is suspended (the button shows an error state).
 
 ### 3.2 Business owner (customer)
 
@@ -66,7 +66,7 @@ enter those keys under Settings → API keys.
 | Call Logs | Search, filter, open transcripts, play recordings, export CSV |
 | Bookings | See bookings/orders with all captured details, change status, open the call, see whether it reached their software |
 | Integrations | Add/edit/pause/delete connectors, send a test, see the delivery log, retry, rotate the secret, download the plugin |
-| Billing | See balance and ledger, submit a top-up (JazzCash / Easypaisa / bank + transaction ID + screenshot), see review status |
+| Billing | See plan, end date and usage, pay for a plan for 1/3/6/12 months (JazzCash / Easypaisa / bank + transaction ID + screenshot), see review status |
 
 Cannot: see other businesses' data (every query is scoped to their own bot), approve their own payments, change prices, or see API keys.
 
@@ -79,15 +79,15 @@ Cannot: see other businesses' data (every query is scoped to their own bot), app
 
 | Area | Can do |
 |---|---|
-| Overview | Total accounts, new this month, suspended, calls today, minutes this month, top-ups this month, usage charged, money held in wallets, pending payments, recent admin activity |
+| Overview | Total accounts, new this month, suspended, calls today, minutes this month, plan payments this month, Vapi cost this month, active plans, pending payments, recent admin activity |
 | Accounts | Search/filter all customers; open an account (bot, voice, calls, bookings, connectors, ledger, admin history) |
 | Login as | Enter any customer's account to help them (blue banner + "Return to admin"); cannot impersonate other admins |
 | Suspend / Re-activate | Reason required; suspended users are signed out, cannot log in, and their bot stops taking calls |
-| Adjust balance | Add or deduct (with reason); goes through the wallet ledger; cannot make a balance negative |
-| Payments | Approve (credits the wallet exactly once) or reject (with a reason the customer sees) manual top-ups; view screenshots |
+| Set plan | Start, extend or end a customer's plan by hand (with reason, audited) |
+| Payments | Approve (activates or extends the plan exactly once) or reject (with a reason the customer sees) manual plan payments; view screenshots |
 | Settings → Site | Site name, support email/phone, terms & privacy links, announcement banner for all customers, turn sign-ups on/off |
 | Settings → SEO | Meta title, description, keywords, share image, Google Analytics ID, allow/deny search-engine indexing, Google preview |
-| Settings → Billing | Price per minute, PKR rate, minimum top-up, low-balance threshold, JazzCash / Easypaisa / bank account details |
+| Settings → Billing | Basic/Business monthly price and fair-use minutes (0 = no limit), free trial days, JazzCash / Easypaisa / bank account details |
 | Settings → API keys | Vapi private/public key, webhook secret, model; ElevenLabs key and voice model; OpenAI key — stored encrypted, shown only as `••••last4`, "Test connection" buttons, Vapi server URL to copy |
 | Settings → Plugins | Turn connectors on/off for the whole platform, allow/deny form connectors, max connectors per account, see and pause **every** connector, download the package, delivery stats |
 | Settings → Cron & system | Is cron running (heartbeat), the cron line to paste in cPanel, "Run now", health checks (debug mode, HTTPS, storage link, keys, webhook secret, mail) |

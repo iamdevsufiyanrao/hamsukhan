@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AdminAction;
 use App\Models\TopUp;
-use App\Services\WalletService;
+use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -14,6 +14,7 @@ use Inertia\Response;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/** Super admin: manual plan payments (JazzCash / Easypaisa / bank) waiting for a check against the real account. */
 class TopUpController extends Controller
 {
     public function index(Request $request): Response
@@ -26,7 +27,8 @@ class TopUpController extends Controller
                 ->map(fn (TopUp $t) => [
                     'id' => $t->id,
                     'user' => ['name' => $t->user->name, 'email' => $t->user->email],
-                    'amountUsd' => (float) $t->amount_usd,
+                    'plan' => $t->planName(),
+                    'months' => $t->months,
                     'amountPkr' => (float) $t->amount_pkr,
                     'method' => $t->methodLabel(),
                     'reference' => $t->reference,
@@ -47,29 +49,29 @@ class TopUpController extends Controller
         return Storage::response($topUp->proof_path);
     }
 
-    public function approve(Request $request, TopUp $topUp, WalletService $wallet): RedirectResponse
+    public function approve(Request $request, TopUp $topUp, SubscriptionService $subscriptions): RedirectResponse
     {
         $note = $request->validate(['note' => ['nullable', 'string', 'max:200']])['note'] ?? null;
         try {
-            $wallet->approveTopUp($topUp, $request->user(), $note);
-            AdminAction::record($request->user(), $topUp->user, 'approve_topup', ['topUpId' => $topUp->id, 'amount' => (float) $topUp->amount_usd, 'reference' => $topUp->reference]);
+            $account = $subscriptions->approvePayment($topUp, $request->user(), $note);
+            AdminAction::record($request->user(), $topUp->user, 'approve_payment', ['topUpId' => $topUp->id, 'plan' => $topUp->plan, 'months' => $topUp->months, 'amountPkr' => (float) $topUp->amount_pkr, 'reference' => $topUp->reference]);
         } catch (RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', "Approved, \${$topUp->amount_usd} added to {$topUp->user->name}'s wallet");
+        return back()->with('success', "Approved, {$account->name}'s {$topUp->planName()} plan is active until {$account->plan_expires_at->format('j M Y')}");
     }
 
-    public function reject(Request $request, TopUp $topUp, WalletService $wallet): RedirectResponse
+    public function reject(Request $request, TopUp $topUp, SubscriptionService $subscriptions): RedirectResponse
     {
         $note = $request->validate(['note' => ['required', 'string', 'max:200']])['note'];
         try {
-            $wallet->rejectTopUp($topUp, $request->user(), $note);
-            AdminAction::record($request->user(), $topUp->user, 'reject_topup', ['topUpId' => $topUp->id, 'note' => $note]);
+            $subscriptions->rejectPayment($topUp, $request->user(), $note);
+            AdminAction::record($request->user(), $topUp->user, 'reject_payment', ['topUpId' => $topUp->id, 'note' => $note]);
         } catch (RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Top-up rejected');
+        return back()->with('success', 'Payment rejected');
     }
 }

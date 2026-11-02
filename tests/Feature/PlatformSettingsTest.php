@@ -19,22 +19,26 @@ class PlatformSettingsTest extends TestCase
         foreach (['site', 'seo', 'billing', 'providers', 'plugins', 'system'] as $tab) {
             $this->actingAs($this->admin())->get("/admin/settings?tab={$tab}")->assertOk();
         }
-        $this->actingAs($this->customer())->patch('/admin/settings/billing', ['rate_per_minute' => 0.01])->assertForbidden();
+        $this->actingAs($this->customer())->patch('/admin/settings/billing', ['basic_price_pkr' => 100])->assertForbidden();
     }
 
-    public function test_billing_settings_override_config_and_change_real_charges(): void
+    public function test_billing_settings_override_plan_prices_and_limits(): void
     {
         $admin = $this->admin();
-        $this->actingAs($admin)->patch('/admin/settings/billing', ['rate_per_minute' => 0.20, 'pkr_per_usd' => 300])->assertSessionHas('success');
+        $this->actingAs($admin)->patch('/admin/settings/billing', ['basic_price_pkr' => 3500, 'business_fair_use_minutes' => 0])->assertSessionHas('success');
 
-        $this->assertEquals(0.20, config('hamsukhan.rate_per_minute'));
+        $this->assertEquals(3500, config('hamsukhan.plans.basic.price_pkr'));
         // A fresh boot (next request) picks it up from the DB, not from .env.
         Cache::forget('hamsukhan:settings');
-        config(['hamsukhan.rate_per_minute' => 0.12]);
+        config(['hamsukhan.plans.basic.price_pkr' => 3000]);
         app(\App\Services\PlatformSettings::class)->apply();
-        $this->assertEquals(0.20, config('hamsukhan.rate_per_minute'));
+        $this->assertEquals(3500, config('hamsukhan.plans.basic.price_pkr'));
+        $this->assertSame(10500, app(\App\Services\SubscriptionService::class)->priceFor('basic', 3));
 
-        $this->assertEquals(0.2, app(\App\Services\WalletService::class)->costFor(60));
+        // 0 minutes = unlimited: a long month of calls never blocks.
+        $bot = $this->customer('business')->bot;
+        $bot->calls()->create(['title' => 'x', 'status' => 'completed', 'started_at' => now(), 'duration_seconds' => 999999]);
+        $this->assertNull(app(\App\Services\SubscriptionService::class)->blockReason($bot));
         $this->assertTrue(AdminAction::where('action', 'update_settings')->exists());
     }
 

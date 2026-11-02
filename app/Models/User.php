@@ -14,7 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'email', 'password', 'avatar_path', 'timezone', 'terms_accepted_at', 'notify_email', 'notify_whatsapp', 'whatsapp_number', 'notify_daily_summary', 'monthly_cap'])]
+#[Fillable(['name', 'email', 'password', 'avatar_path', 'timezone', 'terms_accepted_at', 'notify_email', 'notify_whatsapp', 'whatsapp_number', 'notify_daily_summary'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -25,7 +25,6 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $attributes = [
         'is_admin' => false,
         'timezone' => 'Asia/Karachi',
-        'balance' => 0,
     ];
 
     protected function casts(): array
@@ -36,21 +35,34 @@ class User extends Authenticatable implements MustVerifyEmail
             'suspended_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
-            'balance' => 'decimal:4',
+            'plan_expires_at' => 'datetime',
             'notify_email' => 'boolean',
             'notify_whatsapp' => 'boolean',
             'notify_daily_summary' => 'boolean',
-            'monthly_cap' => 'decimal:2',
             'two_factor_secret' => 'encrypted',
             'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
-    /** Team members work on their owner's bot. */
+    /**
+     * The store (bot) this user is working on: the one they switched to, else the account's first.
+     * Team members work on their owner's bots.
+     */
     public function bot(): HasOne
     {
-        return $this->hasOne(Bot::class, 'user_id', $this->owner_id ? 'owner_id' : 'id');
+        $relation = $this->hasOne(Bot::class, 'user_id', $this->owner_id ? 'owner_id' : 'id');
+        if ($this->current_bot_id) {
+            $relation->orderByRaw('CASE WHEN bots.id = ? THEN 0 ELSE 1 END', [$this->current_bot_id]);
+        }
+
+        return $relation->orderBy('bots.id');
+    }
+
+    /** Every store of the account, oldest first (the first N are the ones the plan covers). */
+    public function bots(): HasMany
+    {
+        return $this->hasMany(Bot::class, 'user_id', $this->owner_id ? 'owner_id' : 'id')->orderBy('bots.id');
     }
 
     public const TEAM_ROLES = ['admin', 'operator', 'viewer'];
@@ -96,11 +108,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(TopUp::class);
     }
 
-    public function transactions(): HasMany
-    {
-        return $this->hasMany(WalletTransaction::class);
-    }
-
     public function isSuspended(): bool
     {
         return $this->suspended_at !== null || ($this->owner_id !== null && $this->owner?->suspended_at !== null);
@@ -118,8 +125,15 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->avatar_path ? Storage::disk('public')->url($this->avatar_path) : null;
     }
 
-    public function minutesLeft(): int
+    /** Key of the paid-up plan (basic | business), or null when there is none or it ran out. Ask on the account (owner). */
+    public function activePlan(): ?string
     {
-        return (int) floor((float) $this->balance / config('hamsukhan.rate_per_minute'));
+        return $this->plan && $this->plan_expires_at?->isFuture() && config("hamsukhan.plans.{$this->plan}") ? $this->plan : null;
+    }
+
+    /** Limits of the active plan; without one, the Basic limits (so a new owner can set up their one store). */
+    public function planLimits(): array
+    {
+        return config('hamsukhan.plans.'.($this->activePlan() ?? 'basic'));
     }
 }

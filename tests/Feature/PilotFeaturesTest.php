@@ -7,7 +7,7 @@ use App\Models\NotificationLog;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\VapiService;
-use App\Services\WalletService;
+use App\Services\SubscriptionService;
 use App\Support\BusinessHours;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
-/** Alerts, spending cap, opening hours, domain allow-list, knowledge gaps, insights and email verification. */
+/** Alerts, fair-use limit, opening hours, domain allow-list, knowledge gaps, insights and email verification. */
 class PilotFeaturesTest extends TestCase
 {
     use RefreshDatabase;
@@ -45,7 +45,7 @@ class PilotFeaturesTest extends TestCase
     public function test_new_lead_alerts_the_owner_once_even_when_vapi_retries(): void
     {
         Mail::fake();
-        $user = $this->customer(10);
+        $user = $this->customer();
 
         $this->postJson('/api/webhooks/vapi', $this->report($user->bot->id, 'c1', $this->booking()))->assertOk();
         $this->postJson('/api/webhooks/vapi', $this->report($user->bot->id, 'c1', $this->booking()))->assertOk();
@@ -59,7 +59,7 @@ class PilotFeaturesTest extends TestCase
         Mail::fake();
         config(['hamsukhan.whatsapp.token' => 'wa', 'hamsukhan.whatsapp.phone_number_id' => '123', 'hamsukhan.whatsapp.template' => 'lead_alert']);
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.1']]])]);
-        $user = $this->customer(10);
+        $user = $this->customer();
         $user->update(['notify_whatsapp' => true, 'whatsapp_number' => '+923331112222']);
 
         $this->postJson("/api/widget/{$user->bot->public_key}/callback", ['name' => 'Ali', 'phone' => '03001234567', 'consent' => true])->assertOk();
@@ -71,7 +71,7 @@ class PilotFeaturesTest extends TestCase
     public function test_failed_alert_is_logged_and_does_not_break_the_call(): void
     {
         Mail::shouldReceive('raw')->andThrow(new \RuntimeException('SMTP down'));
-        $user = $this->customer(10);
+        $user = $this->customer();
 
         $this->postJson('/api/webhooks/vapi', $this->report($user->bot->id, 'c2', $this->booking()))->assertOk();
 
@@ -79,38 +79,41 @@ class PilotFeaturesTest extends TestCase
         $this->assertSame('failed', NotificationLog::firstOrFail()->status);
     }
 
-    public function test_low_balance_alert_is_sent_once_per_top_up(): void
+    public function test_fair_use_alert_is_sent_once_a_month(): void
     {
         Mail::fake();
-        $user = $this->customer(0.5);
-        $wallet = app(WalletService::class);
+        config(['hamsukhan.plans.basic.fair_use_minutes' => 1]);
+        $user = $this->customer();
+        $subscriptions = app(SubscriptionService::class);
 
-        $wallet->checkAlerts($user);
-        $wallet->checkAlerts($user);
-        $this->assertSame(1, NotificationLog::where('kind', 'low_balance')->count());
+        $subscriptions->checkAlerts($user);
+        $this->assertSame(0, NotificationLog::where('kind', 'fair_use')->count());
+
+        $user->bot->calls()->create(['title' => 'x', 'status' => 'completed', 'started_at' => now(), 'duration_seconds' => 70]);
+        $subscriptions->checkAlerts($user);
+        $subscriptions->checkAlerts($user);
+        $this->assertSame(1, NotificationLog::where('kind', 'fair_use')->count());
     }
 
-    public function test_monthly_cap_limits_and_then_blocks_calls(): void
+    public function test_renewal_reminder_is_sent_once_per_paid_period(): void
     {
-        $user = $this->customer(50);
-        $user->update(['monthly_cap' => 1.00]);
-        $wallet = app(WalletService::class);
+        Mail::fake();
+        $user = $this->customer();
+        $user->forceFill(['plan_expires_at' => now()->addDays(2)])->save();
+        $notify = app(\App\Services\NotificationService::class);
 
-        // $1 at $0.12/min = 500 seconds, below the 10-minute bot maximum
-        $this->assertSame(500, $wallet->maxAffordableSeconds($user->fresh(), 10));
-
-        $user->transactions()->create(['type' => 'call_charge', 'amount' => -1.00, 'balance_after' => 49, 'description' => 'x', 'created_at' => now()]);
-        $this->postJson("/api/widget/{$user->bot->public_key}/start")->assertStatus(402)->assertJson(['reason' => 'cap_reached']);
+        $notify->planExpiring($user);
+        $notify->planExpiring($user);
+        $this->assertSame(1, NotificationLog::where('kind', 'plan_expiring')->count());
     }
 
-    public function test_notification_settings_store_the_cap_in_wallet_currency(): void
+    public function test_notification_settings_are_saved(): void
     {
         $user = $this->customer();
-        $this->actingAs($user)->patch('/settings/notifications', ['email' => true, 'whatsapp' => true, 'whatsappNumber' => '0333 1112222', 'dailySummary' => false, 'monthlyCapPkr' => 2800])
+        $this->actingAs($user)->patch('/settings/notifications', ['email' => true, 'whatsapp' => true, 'whatsappNumber' => '0333 1112222', 'dailySummary' => false])
             ->assertSessionHasNoErrors();
 
         $user->refresh();
-        $this->assertEquals(10.0, (float) $user->monthly_cap); // 2800 / 280
         $this->assertSame('+923331112222', $user->whatsapp_number);
         $this->assertFalse($user->notify_daily_summary);
 
@@ -120,7 +123,7 @@ class PilotFeaturesTest extends TestCase
 
     public function test_opening_hours_reach_the_prompt_and_mark_after_hours_calls(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $hours = ['mon' => ['open' => '10:00', 'close' => '21:00'], 'tue' => ['open' => '10:00', 'close' => '21:00', 'closed' => false], 'sun' => ['closed' => true]];
         $this->actingAs($user)->patch('/bot-studio/hours', ['hours' => $hours, 'holidays' => [['date' => '2026-12-25', 'note' => 'Quaid Day']]])->assertSessionHasNoErrors();
 
@@ -140,7 +143,7 @@ class PilotFeaturesTest extends TestCase
 
     public function test_widget_only_runs_on_allowed_domains(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $this->actingAs($user)->patch('/bot-studio/domains', ['domains' => ['https://www.MySalon.pk/contact', '']])->assertSessionHasNoErrors();
         $this->assertSame(['mysalon.pk'], $user->bot->fresh()->allowed_domains);
         $key = $user->bot->public_key;
@@ -155,7 +158,7 @@ class PilotFeaturesTest extends TestCase
 
     public function test_unanswered_questions_are_stored_and_shown_in_insights(): void
     {
-        $user = $this->customer(10);
+        $user = $this->customer();
         $this->postJson('/api/webhooks/vapi', $this->report($user->bot->id, 'g1', ['unansweredQuestions' => ['Parking hai?', '']] + $this->booking()))->assertOk();
         $this->postJson('/api/webhooks/vapi', $this->report($user->bot->id, 'g2', ['unansweredQuestions' => ['parking hai']]))->assertOk();
 
@@ -172,7 +175,7 @@ class PilotFeaturesTest extends TestCase
     public function test_daily_summary_only_on_days_with_activity(): void
     {
         Mail::fake();
-        $user = $this->customer(10);
+        $user = $this->customer();
         $notify = app(NotificationService::class);
 
         $this->assertFalse($notify->dailySummary($user, now()));
