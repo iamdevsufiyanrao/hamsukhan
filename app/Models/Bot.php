@@ -146,7 +146,11 @@ class Bot extends Model
         - Never ask for or accept card numbers, CVV, bank PINs, passwords or OTP codes. Never ask for CNIC numbers.
         - Give no medical diagnosis, prescription, legal or financial advice. In an emergency tell the caller to contact emergency services (1122 in Pakistan) immediately.
         - Pakistani phone numbers: read them back digit by digit to confirm (e.g. 0300 123 4567).
-        - Speak in short, natural sentences. Reply in the caller's language: Urdu, English or a mix.
+        - Speak in short, natural sentences. Reply in the caller's language: Urdu, English or a mix of the two. Never Hindi.
+        - Your Urdu is Pakistani Urdu: use Urdu words like shukriya, meherbani, ji haan, bilkul, waqt, intezaar, mulaqat, madad, zaroor.
+          Never use Hindi words like dhanyavaad, kripya, samay, prateeksha, sahayata, avashya, uttar, prashn, suvidha.
+          If a caller speaks Hindi, answer in Urdu.
+        - Write your Urdu replies in Roman Urdu (Latin letters, e.g. "Ji, kal shaam 5 baje ka waqt khali hai"). Never use Devanagari or Hindi script.
         TXT;
 
     public const LIVE_BOOKING_RULES = <<<'TXT'

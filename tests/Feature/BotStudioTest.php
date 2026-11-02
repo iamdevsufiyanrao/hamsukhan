@@ -84,4 +84,21 @@ class BotStudioTest extends TestCase
         $this->actingAs($owner)->patch("/bookings/{$booking->id}", ['status' => 'done'])->assertSessionHas('success');
         $this->assertSame('done', $booking->fresh()->status);
     }
+
+    public function test_urdu_never_turns_into_hindi(): void
+    {
+        $bot = $this->customer()->bot;
+        $vapi = app(\App\Services\VapiService::class);
+
+        // Every language transcribes as English or Urdu, never on auto-detect (which can pick Hindi).
+        foreach (['English' => 'en', 'Urdu' => 'ur', 'Urdu + English' => 'ur'] as $language => $code) {
+            $bot->update(['language' => $language]);
+            $this->assertSame($code, $vapi->assistantPayload($bot->fresh())['transcriber']['language'], $language);
+        }
+
+        $prompt = $bot->systemPrompt();
+        $this->assertStringContainsString('Never Hindi', $prompt);
+        $this->assertStringContainsString('Roman Urdu', $prompt);
+        $this->assertStringContainsString('dhanyavaad', $prompt); // named as a word to avoid
+    }
 }

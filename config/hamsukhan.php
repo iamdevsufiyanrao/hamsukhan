@@ -189,7 +189,8 @@ return [
 
     /*
     | Languages the bot can be set to. Only languages with their own QA are listed (Pakistan-first).
-    | `code` goes to the transcriber; "Urdu + English" transcribes multilingual so callers can code-switch.
+    | `code` goes to the transcriber. Never Hindi: "Urdu + English" is transcribed as Urdu (Scribe keeps the English
+    | words a caller mixes in); left on auto-detect, Scribe sometimes took Urdu speech for Hindi and wrote Devanagari.
     */
     'languages' => [
         'English' => 'en',
@@ -204,7 +205,7 @@ return [
     'transcribers' => [
         'en' => ['provider' => 'deepgram', 'model' => 'nova-2', 'language' => 'en'],
         'ur' => ['provider' => '11labs', 'model' => 'scribe_v1', 'language' => 'ur'],
-        'multi' => ['provider' => '11labs', 'model' => 'scribe_v1'],
+        'multi' => ['provider' => '11labs', 'model' => 'scribe_v1', 'language' => 'ur'],
     ],
 
     /*
