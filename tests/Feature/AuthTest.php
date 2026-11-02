@@ -43,7 +43,9 @@ class AuthTest extends TestCase
         $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->bot);
         $this->assertNotNull($user->bot->vapi_assistant_id); // simulated sync ran
-        $this->assertNull($user->activePlan()); // no free plan unless the admin sets trial days
+        // Launch offer: the first month is free (Basic plan for trial_days, 30 by default).
+        $this->assertSame('basic', $user->activePlan());
+        $this->assertTrue($user->plan_expires_at->between(now()->addDays(30)->subMinute(), now()->addDays(30)->addMinute()));
         $this->assertSame('Asia/Karachi', $user->timezone);
     }
 

@@ -335,6 +335,48 @@ const VIDEO_POINTS: [IconName, string, string][] = [
 ];
 
 /** "Watch: Hamsukhan in 60 seconds": an uploaded video (vertical in a phone frame, or wide) or a YouTube link. */
+/**
+ * Rotating hooks under the hero text: one big reason at a time (every 4 s, pauses on hover/focus,
+ * no motion for people who ask for reduced motion). The no-balance hook leads: in Pakistan many
+ * would-be customers can't phone a business because they have no mobile balance.
+ */
+function HeroHooks({ trialText }: { trialText: string | null }) {
+    const hooks: { icon: IconName; title: string; text: string }[] = [
+        { icon: 'phone', title: 'Customers call you without any mobile balance', text: 'It is a free internet call from your website. No balance, no package, so no lead is lost because their credit ran out.' },
+        ...(trialText ? [{ icon: 'wallet' as IconName, title: `${trialText}. Really.`, text: 'The full Basic plan for 30 days: unlimited calls, your voice, bookings and alerts. No card, no payment details.' }] : []),
+        { icon: 'clock', title: 'Answers at 2 AM, on Sundays and on Eid', text: 'Every enquiry after closing time becomes a booking or order instead of a missed call.' },
+        { icon: 'mic', title: 'Real Pakistani Urdu, in your own voice', text: 'Shukriya, ji haan, bilkul: it talks like your best staff member, in Urdu or English, never Hindi.' },
+        { icon: 'users', title: 'Never a busy line', text: 'Many customers can talk at the same time. Nobody waits, nobody hangs up.' },
+    ];
+    const [i, setI] = useState(0);
+    const [paused, setPaused] = useState(false);
+    useEffect(() => {
+        if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const t = window.setInterval(() => setI((n) => (n + 1) % hooks.length), 4000);
+        return () => window.clearInterval(t);
+    }, [paused, hooks.length]);
+    const h = hooks[i % hooks.length];
+
+    return (
+        <div className="lp-hooks lp-enter" style={{ '--d': '560ms' } as CSSProperties} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+            <div className="lp-hook" key={i} aria-live="polite">
+                <span className="lp-hook-ic">
+                    <Icon name={h.icon} />
+                </span>
+                <span>
+                    <b>{h.title}</b>
+                    <small>{h.text}</small>
+                </span>
+            </div>
+            <div className="lp-hook-dots" role="tablist" aria-label="Reasons">
+                {hooks.map((x, n) => (
+                    <button key={x.title} type="button" role="tab" aria-selected={n === i % hooks.length} aria-label={x.title} className={n === i % hooks.length ? 'on' : ''} onClick={() => setI(n)} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function IntroVideo({ video, name, onDemo }: { video: IntroVideoData; name: string; onDemo: () => void }) {
     const wide = !!video.youtubeId || !video.vertical;
     const player = video.youtubeId ? (
@@ -539,7 +581,8 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
     const { plans, trialDays } = config;
     const basic = plans.find((p) => p.id === 'basic') ?? plans[0];
     const startHref = auth ? '/dashboard' : site.allowSignups ? '/register' : '/login';
-    const startLabel = auth ? 'Open dashboard' : !site.allowSignups ? 'Log in' : trialDays > 0 ? `Start ${trialDays}-day free trial` : 'Get started';
+    const trialText = trialDays >= 28 ? 'First month free' : trialDays > 0 ? `${trialDays} days free` : null;
+    const startLabel = auth ? 'Open dashboard' : !site.allowSignups ? 'Log in' : trialDays >= 28 ? 'Start your free month' : trialDays > 0 ? `Start ${trialDays}-day free trial` : 'Get started';
     const wa = site.whatsapp ? `https://wa.me/${site.whatsapp.replace(/\D/g, '').replace(/^0/, '92')}` : null;
     useReveal();
 
@@ -662,10 +705,18 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                 <div className="lp-aurora" aria-hidden="true" />
                 <div className="lp-wrap lp-hero-in">
                     <div className="lp-hero-copy">
-                        <span className="lp-eyebrow lp-enter" style={{ '--d': '0ms' } as CSSProperties}>
-                            <span className="lp-live" />
-                            AI voice receptionist · Urdu + English
-                        </span>
+                        {trialText && !auth ? (
+                            <Link href={startHref} className="lp-eyebrow lp-offer lp-enter" style={{ '--d': '0ms' } as CSSProperties}>
+                                <span className="lp-offer-tag">{trialText}</span>
+                                No card, no payment. Try everything for {trialDays >= 28 ? '30 days' : `${trialDays} days`}.
+                                <Icon name="chev" className="i i-sm" />
+                            </Link>
+                        ) : (
+                            <span className="lp-eyebrow lp-enter" style={{ '--d': '0ms' } as CSSProperties}>
+                                <span className="lp-live" />
+                                AI voice receptionist · Urdu + English
+                            </span>
+                        )}
                         <h1>
                             {headline.map((w, i) => (
                                 <span key={w} className="lp-word" style={{ '--d': `${80 + i * 70}ms` } as CSSProperties}>
@@ -684,6 +735,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                         <p className="lp-lead lp-enter" style={{ '--d': '520ms' } as CSSProperties}>
                             {name} is an AI receptionist on your website. Visitors tap a button and talk in Urdu or English; it answers their questions, takes the booking or order and sends it to you on WhatsApp. <b>Aap ki awaaz mein, 24/7.</b>
                         </p>
+                        <HeroHooks trialText={trialText} />
                         <div className="lp-cta lp-enter" style={{ '--d': '620ms' } as CSSProperties}>
                             <button className="btn btn-primary btn-lg lp-shine" onClick={() => go('demo')}>
                                 <span className="lp-play">
@@ -703,7 +755,7 @@ export default function Landing({ samples = [] }: { samples?: Sample[] }) {
                             )}
                         </div>
                         <ul className="lp-ticks lp-enter" style={{ '--d': '720ms' } as CSSProperties}>
-                            {['No app needed for visitors', 'Ready in about 10 minutes', 'Unlimited calls, one monthly price'].map((t) => (
+                            {['No mobile balance needed to call you', 'Ready in about 10 minutes', 'Unlimited calls, one monthly price'].map((t) => (
                                 <li key={t}>
                                     <Icon name="check" className="i i-sm" />
                                     {t}

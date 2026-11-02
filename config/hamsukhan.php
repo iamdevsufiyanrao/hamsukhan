@@ -66,8 +66,8 @@ return [
         'scopes' => 'write_script_tags',
         'api_version' => env('SHOPIFY_API_VERSION', '2025-07'),
     ],
-    // Days of free Basic plan for a new sign-up (0 = none, they pay before the first call).
-    'trial_days' => (int) env('HAMSUKHAN_TRIAL_DAYS', 0),
+    // Days of free Basic plan for a new sign-up (0 = none, they pay before the first call). Launch offer: first month free.
+    'trial_days' => (int) env('HAMSUKHAN_TRIAL_DAYS', 30),
     'max_cloned_voices' => 5,
     'min_clone_seconds' => 30,
 

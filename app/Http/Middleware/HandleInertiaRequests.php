@@ -93,7 +93,9 @@ class HandleInertiaRequests extends Middleware
 
         return [
             'active' => $plan !== null,
-            'name' => $plan ? $account->planLimits()['name'] : null,
+            // The sign-up trial: Basic that was never paid for nor set by an admin.
+            'name' => $plan ? $account->planLimits()['name'].($plan === 'basic' && ! $account->topUps()->where('status', 'approved')->exists()
+                && ! \App\Models\AdminAction::where('target_user_id', $account->id)->where('action', 'set_plan')->exists() ? ' · free trial' : '') : null,
             'expiresAt' => $account->plan_expires_at?->toIso8601String(),
             'daysLeft' => $plan ? (int) ceil(now()->diffInDays($account->plan_expires_at, true)) : 0,
         ];
