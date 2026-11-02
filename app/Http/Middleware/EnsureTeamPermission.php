@@ -18,7 +18,7 @@ class EnsureTeamPermission
 {
     private const OWNER_ONLY = ['billing', 'payments.store', 'payments.checkout', 'jazzcash.redirect', 'easypaisa.redirect', 'stores.store', 'stores.destroy'];
 
-    private const ANY_ROLE = ['stores.switch'];
+    private const ANY_ROLE = ['stores.switch', 'install.check'];
 
     private const OPERATOR_WRITES = ['bookings.update', 'bookings.ai-callback', 'live-calls.say', 'live-calls.instruct', 'live-calls.end', 'test-call.finish'];
 

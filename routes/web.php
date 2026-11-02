@@ -154,6 +154,9 @@ Route::middleware(['auth', EnsureNotSuspended::class, EnsureEmailVerified::class
     Route::patch('/bot-studio/domains', [BotStudioController::class, 'updateDomains'])->name('bot.domains');
     Route::patch('/bot-studio/phone', [BotStudioController::class, 'updatePhone'])->name('bot.phone');
     Route::post('/bot-studio/versions/{version}/restore', [BotStudioController::class, 'restoreVersion'])->name('bot.versions.restore');
+    Route::get('/bot-studio/wordpress-plugin.zip', [\App\Http\Controllers\InstallController::class, 'wordpressPlugin'])->name('install.wordpress');
+    Route::post('/bot-studio/install/email', [\App\Http\Controllers\InstallController::class, 'email'])->middleware('throttle:5,1')->name('install.email');
+    Route::post('/bot-studio/install/check', [\App\Http\Controllers\InstallController::class, 'check'])->middleware('throttle:10,1')->name('install.check');
     Route::post('/bot-studio/sync', [BotStudioController::class, 'sync'])->middleware('throttle:10,1')->name('bot.sync');
 
     Route::post('/voices', [VoiceController::class, 'store'])->middleware('throttle:10,1')->name('voices.store');

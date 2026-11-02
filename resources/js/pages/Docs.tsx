@@ -610,7 +610,7 @@ export default function Docs({ appUrl, site, supportEmail }: Props) {
 
                     <section id="install">
                         <h2>Put it on your website</h2>
-                        <p>Copy your own line from <b>Bot Studio → Add to your website</b> (it already has your bot key). It looks like this:</p>
+                        <p>Open <b>Bot Studio → Add to website</b>, pick where your website is made and follow 2–3 steps: no developer needed. Shopify connects in one click, WordPress gets a ready plugin, and "Someone else runs my site" emails the steps to your web person. Afterwards press <b>Check my website</b>. Under the hood it is one line:</p>
                         <Code code={widget} label="HTML" />
                         <div className="docs-grid">
                             <div>
@@ -619,11 +619,11 @@ export default function Docs({ appUrl, site, supportEmail }: Props) {
                             </div>
                             <div>
                                 <h4>WordPress</h4>
-                                <p>Appearance → Theme File Editor → <code>footer.php</code>, paste before <code>&lt;/body&gt;</code>. Or use any "header & footer scripts" plugin.</p>
+                                <p>No code: Bot Studio → Add to website → <b>WordPress</b> → <b>Download plugin</b> (your key is already inside). Then Plugins → Add New Plugin → Upload Plugin → Install Now → Activate.</p>
                             </div>
                             <div>
                                 <h4>Shopify</h4>
-                                <p>Integrations → <b>Shopify</b> → enter your store name → Connect. The call button is added for you. Without the app: Online Store → Themes → Edit code → <code>theme.liquid</code>, paste before <code>&lt;/body&gt;</code>.</p>
+                                <p>Bot Studio → Add to website → <b>Shopify</b> → type your store name → Connect. The call button is added for you. Without the app: Online Store → Themes → Customize → Footer → Add section → <b>Custom Liquid</b> → paste → Save.</p>
                             </div>
                             <div>
                                 <h4>Wix / Squarespace / Webflow</h4>

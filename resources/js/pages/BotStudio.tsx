@@ -1,7 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import Icon, { IconName } from '@/components/Icon';
-import ShopifyGuide from '@/components/ShopifyGuide';
+import InstallWizard, { type InstallInfo } from '@/components/InstallWizard';
 import { FieldError, Modal, Seg, useUI } from '@/components/ui';
 import AppLayout from '@/layouts/AppLayout';
 import { fileSize, fmtDate, fmtDateLong } from '@/lib/format';
@@ -59,6 +59,7 @@ type Props = {
         fieldPresets: Record<string, CaptureField[]>;
     };
     embedSrc: string;
+    install: InstallInfo;
     versions: { id: number; at: string; by: string | null; note: string | null; greeting: string | null; prompt: string | null; quickFacts: string | null }[];
 };
 
@@ -67,7 +68,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
     { id: 'voice', label: 'Voice', icon: 'wave' },
     { id: 'knowledge', label: 'Knowledge', icon: 'book' },
     { id: 'widget', label: 'Widget', icon: 'layout' },
-    { id: 'embed', label: 'Embed code', icon: 'code' },
+    { id: 'embed', label: 'Add to website', icon: 'code' },
 ];
 const STATE_ICON: Record<WState, IconName> = { idle: 'mic', loading: 'loader', active: 'hang', error: 'alert' };
 
@@ -139,7 +140,7 @@ export default function BotStudio(props: Props) {
                     {tab === 'widget' && <WidgetPane form={widget} wState={previewState} setWState={setPreviewState} />}
                     {tab === 'embed' && (
                         <>
-                            <EmbedPane src={props.embedSrc} publicKey={bot.publicKey} installedAt={bot.installedAt} />
+                            <InstallWizard src={props.embedSrc} publicKey={bot.publicKey} installedAt={bot.installedAt} info={props.install} />
                             <DomainsCard domains={bot.allowedDomains} />
                         </>
                     )}
@@ -973,57 +974,6 @@ function WidgetPreview({ widget, state }: { widget: Widget; state: WState }) {
     );
 }
 
-/* ---------- Embed ---------- */
-function EmbedPane({ src, publicKey, installedAt }: { src: string; publicKey: string; installedAt: string | null }) {
-    const { toast } = useUI();
-    const snippet = `<script src="${src}" data-bot="${publicKey}" defer></script>`;
-
-    return (
-        <>
-        <div className="card">
-            <div className="card-h">
-                <div>
-                    <h3>Add to your website</h3>
-                    <p>Paste this one line before the closing &lt;/body&gt; tag.</p>
-                </div>
-                <button
-                    className="btn btn-ink btn-sm"
-                    onClick={() =>
-                        navigator.clipboard?.writeText(snippet).then(
-                            () => toast('Snippet copied'),
-                            () => toast('Select the code and copy it manually', 'error'),
-                        )
-                    }
-                >
-                    <Icon name="copy" className="i i-sm" />
-                    Copy code
-                </button>
-            </div>
-            <div className="card-b">
-                <pre className="code mono" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {snippet}
-                </pre>
-                <div className="notice" style={{ marginTop: 14, background: installedAt ? 'var(--info-soft)' : undefined, color: installedAt ? 'var(--info)' : undefined }}>
-                    <Icon name={installedAt ? 'check' : 'clock'} className="i i-sm" />
-                    {installedAt ? `Installed, first seen on your site ${fmtDateLong(installedAt)}.` : "Not detected yet, we'll mark it installed the first time the widget loads on your site."}
-                </div>
-                <div className="steps">
-                    <div>
-                        <b>1</b>Copy the snippet above.
-                    </div>
-                    <div>
-                        <b>2</b>Paste it into your site's HTML, just before &lt;/body&gt; (WordPress: Appearance → Theme File Editor → footer.php).
-                    </div>
-                    <div>
-                        <b>3</b>Reload your site. The call button appears in the position you set.
-                    </div>
-                </div>
-            </div>
-        </div>
-        <ShopifyGuide publicKey={publicKey} snippet={snippet} />
-        </>
-    );
-}
 
 /* ---------- Phone calls and handoff ---------- */
 function PhoneCard({ bot }: { bot: Props['bot'] }) {

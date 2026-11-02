@@ -84,6 +84,12 @@ class BotStudioController extends Controller
                 'fieldPresets' => CaptureFields::presets(),
             ],
             'embedSrc' => url('/widget.js'),
+            // The no-developer install wizard (Bot Studio → Add to website).
+            'install' => [
+                'website' => $bot->website,
+                'shopifyEnabled' => app(\App\Services\ShopifyService::class)->enabled(),
+                'shopifyShops' => $bot->shopifyShops()->whereNull('uninstalled_at')->pluck('shop'),
+            ],
             'versions' => $bot->knowledgeVersions()->with('user:id,name')->latest('id')->limit(20)->get()->map(fn (KnowledgeVersion $v) => [
                 'id' => $v->id,
                 'at' => $v->created_at->toIso8601String(),

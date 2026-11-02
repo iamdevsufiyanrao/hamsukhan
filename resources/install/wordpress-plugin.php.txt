@@ -1,0 +1,102 @@
+<?php
+/**
+ * Plugin Name:       {{SITE}} Voice Receptionist
+ * Description:       Adds the {{SITE}} AI receptionist call button to every page. Activate and you are done: your key is already inside.
+ * Version:           1.0.0
+ * Requires at least: 5.0
+ * Requires PHP:      7.2
+ * Author:            {{SITE}}
+ * Author URI:        {{HOST}}
+ * License:           GPL-2.0-or-later
+ * Text Domain:       hamsukhan-voice-receptionist
+ */
+
+if (! defined('ABSPATH')) {
+    exit;
+}
+
+define('HAMSUKHAN_DEFAULT_KEY', '{{KEY}}');
+define('HAMSUKHAN_HOST', '{{HOST}}');
+
+/** On first activation, remember the key that came with this download (the settings page can change it). */
+register_activation_hook(__FILE__, function () {
+    if (! get_option('hamsukhan_bot_key')) {
+        update_option('hamsukhan_bot_key', HAMSUKHAN_DEFAULT_KEY);
+    }
+    if (get_option('hamsukhan_enabled') === false) {
+        update_option('hamsukhan_enabled', '1');
+    }
+    set_transient('hamsukhan_just_activated', 1, 60);
+});
+
+/** The call button on every public page. */
+add_action('wp_footer', function () {
+    $key = trim((string) get_option('hamsukhan_bot_key', HAMSUKHAN_DEFAULT_KEY));
+    if (get_option('hamsukhan_enabled', '1') !== '1' || $key === '' || is_admin()) {
+        return;
+    }
+    printf("<script src=\"%s\" data-bot=\"%s\" defer></script>\n", esc_url(HAMSUKHAN_HOST.'/widget.js'), esc_attr($key));
+}, 100);
+
+/** "It's live" message right after activation. */
+add_action('admin_notices', function () {
+    if (! get_transient('hamsukhan_just_activated')) {
+        return;
+    }
+    delete_transient('hamsukhan_just_activated');
+    printf(
+        '<div class="notice notice-success is-dismissible"><p><strong>%s is live.</strong> Open your website: a "Talk to us" button is now in the corner. <a href="%s">Settings</a></p></div>',
+        esc_html('{{SITE}}'),
+        esc_url(admin_url('options-general.php?page=hamsukhan'))
+    );
+});
+
+/** Settings → {{SITE}}: switch the button off, or paste another key. */
+add_action('admin_menu', function () {
+    add_options_page('{{SITE}}', '{{SITE}}', 'manage_options', 'hamsukhan', 'hamsukhan_settings_page');
+});
+
+add_action('admin_init', function () {
+    register_setting('hamsukhan', 'hamsukhan_bot_key', ['sanitize_callback' => function ($v) {
+        return preg_replace('/[^a-f0-9-]/i', '', (string) $v);
+    }]);
+    register_setting('hamsukhan', 'hamsukhan_enabled', ['sanitize_callback' => function ($v) {
+        return $v === '1' ? '1' : '0';
+    }]);
+});
+
+function hamsukhan_settings_page()
+{
+    if (! current_user_can('manage_options')) {
+        return;
+    } ?>
+    <div class="wrap">
+        <h1><?php echo esc_html('{{SITE}}'); ?> Voice Receptionist</h1>
+        <p>The call button shows on every page of your website. Change how it looks and what it says in your <a href="<?php echo esc_url(HAMSUKHAN_HOST.'/bot-studio'); ?>" target="_blank" rel="noopener"><?php echo esc_html('{{SITE}}'); ?> dashboard</a>.</p>
+        <form method="post" action="options.php">
+            <?php settings_fields('hamsukhan'); ?>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">Show the call button</th>
+                    <td><label><input type="checkbox" name="hamsukhan_enabled" value="1" <?php checked(get_option('hamsukhan_enabled', '1'), '1'); ?>> On</label></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="hamsukhan_bot_key">Bot key</label></th>
+                    <td>
+                        <input id="hamsukhan_bot_key" name="hamsukhan_bot_key" class="regular-text code" value="<?php echo esc_attr(get_option('hamsukhan_bot_key', HAMSUKHAN_DEFAULT_KEY)); ?>">
+                        <p class="description">Already filled in for you. Only change it to connect a different store.</p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(); ?>
+        </form>
+    </div>
+    <?php
+}
+
+/** A "Settings" link next to Deactivate on the Plugins page. */
+add_filter('plugin_action_links_'.plugin_basename(__FILE__), function ($links) {
+    array_unshift($links, '<a href="'.esc_url(admin_url('options-general.php?page=hamsukhan')).'">Settings</a>');
+
+    return $links;
+});
